@@ -22,7 +22,7 @@
 # = 阶段1：Python 依赖编译
 # ===============================================================
 
-FROM python:3.12.7-slim-bookworm AS build
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12.7-slim-bookworm AS build
 
 # ---------------------------------------------------------------
 # = 编译环境构建
@@ -47,7 +47,7 @@ RUN pip install --no-cache-dir -r /requirements.txt
 # ===============================================================
 # = 阶段2：运行时
 # ===============================================================
-FROM python:3.12.7-slim-bookworm
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12.7-slim-bookworm
 
 # ---------------------------------------------------------------
 # = 环境构建
