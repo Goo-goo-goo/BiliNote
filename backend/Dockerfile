@@ -3,13 +3,12 @@
 #   阶段1 Python 依赖编译（清华 pypi 源）
 #   阶段2 运行时（slim + 代码 + 前端产物，FastAPI 直接服务页面）
 #
-# 注意：前端构建产物已提交在 backend/static/frontend/，前端有改动后需重新
-#   build 并同步提交：
+# 注意：前端构建产物已提交在 static/frontend/，前端有改动后需重新 build 并同步：
 #     cd BillNote_frontend && DOCKER_BUILD=1 pnpm build
 #     rm -rf ../backend/static/frontend && cp -R dist ../backend/static/frontend
 #
-# 构建（仓库根目录为 context）：
-#   docker build -f backend/Dockerfile -t bilinote:local .
+# 构建（context 就是 backend/ 目录，见 .dockerignore 排除运行时文件）：
+#   cd backend && docker build -t bilinote:local .
 #
 # 数据目录（建议挂载持久化）：
 #   /app/backend/bili_note.db           — SQLite 数据库
@@ -41,7 +40,7 @@ RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
 
 # ---------------------------------------------------------------
 # = 应用安装
-COPY backend/requirements.txt /
+COPY requirements.txt /
 RUN pip install --no-cache-dir -r /requirements.txt
 
 
@@ -81,9 +80,9 @@ ENV HF_ENDPOINT=https://hf-mirror.com
 ENV PYTHONPATH=/app/backend
 
 # 应用代码（频繁变动的层放后面）。
-# 前端静态产物已提交在 backend/static/frontend/（见根 .gitignore 例外），
-# 随 backend/ 一起 COPY 进来，main.py 直接挂载，无需 nginx/独立前端容器。
-COPY backend/ /app/backend/
+# 前端静态产物已提交在 static/frontend/（见根 .gitignore 例外），
+# 随代码一起 COPY 进来，main.py 直接挂载，无需 nginx/独立前端容器。
+COPY . /app/backend/
 
 WORKDIR /app/backend
 

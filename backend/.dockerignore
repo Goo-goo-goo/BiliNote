@@ -1,0 +1,23 @@
+# 构建 context 为 backend/ 目录，这里排除运行时生成/本地环境文件，
+# 避免把 .venv、模型、数据库等打进镜像或拖慢 build context 传输。
+# 注意：static/frontend/ 是提交进仓库的前端产物，必须保留，不能在这里排除。
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+data/
+models/
+uploads/
+note_results/
+static/screenshots/
+config/
+tests/
+build/
+dist/
+Dockerfile
+.dockerignore
+*.log
+.DS_Store
