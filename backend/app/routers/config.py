@@ -43,9 +43,32 @@ def update_cookie(data: CookieUpdateRequest):
 
     )
 
+
+@router.get("/bili_qrcode")
+def bili_qrcode():
+    """申请 B 站登录二维码（扫码后 cookie 自动保存到下载配置）。"""
+    from app.services import bili_qrcode_login
+    try:
+        return R.success(data=bili_qrcode_login.generate_qrcode())
+    except Exception as e:
+        return R.error(msg=f"生成二维码失败：{e}")
+
+
+@router.get("/bili_qrcode/status")
+def bili_qrcode_status(qrcode_key: str):
+    """轮询 B 站扫码状态：pending / scanned / expired / success（成功时 cookie 已自动保存）。"""
+    from app.services import bili_qrcode_login
+    try:
+        return R.success(data=bili_qrcode_login.poll_qrcode(qrcode_key))
+    except Exception as e:
+        return R.error(msg=f"查询扫码状态失败：{e}")
+
 class TranscriberConfigRequest(BaseModel):
     transcriber_type: str
     whisper_model_size: Optional[str] = None
+    openai_api_base_url: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    openai_api_model: Optional[str] = None
 
 
 AVAILABLE_TRANSCRIBER_TYPES = [
@@ -54,6 +77,7 @@ AVAILABLE_TRANSCRIBER_TYPES = [
     {"value": "kuaishou", "label": "快手（在线）"},
     {"value": "groq", "label": "Groq（在线）"},
     {"value": "mlx-whisper", "label": "MLX Whisper（仅macOS）"},
+    {"value": "openai-api", "label": "自定义 OpenAI 兼容 ASR"},
 ]
 
 WHISPER_MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"]
@@ -114,6 +138,9 @@ def update_transcriber_config(data: TranscriberConfigRequest):
     config = transcriber_config_manager.update_config(
         transcriber_type=data.transcriber_type,
         whisper_model_size=data.whisper_model_size,
+        openai_api_base_url=data.openai_api_base_url,
+        openai_api_key=data.openai_api_key,
+        openai_api_model=data.openai_api_model,
     )
     return R.success(data=config)
 
@@ -215,11 +242,18 @@ def get_transcriber_models_status():
         downloaded = _check_whisper_model_exists(size, "whisper")
         statuses.append(dl_state.status_row(size, downloaded))
 
-    # 也检查 mlx-whisper（仅 macOS）
+    # 也检查 mlx-whisper（仅 macOS，且已安装 mlx_whisper 包——包是可选依赖，
+    # 未安装时这里不能直接 import，否则整个接口 500）
     mlx_available = platform.system() == "Darwin"
     mlx_statuses = []
+    MLX_MODEL_MAP = None
     if mlx_available:
-        from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP
+        try:
+            from app.transcriber.mlx_whisper_transcriber import MLX_MODEL_MAP as _MLX_MAP
+            MLX_MODEL_MAP = _MLX_MAP
+        except Exception:
+            mlx_available = False
+    if mlx_available:
         for size in WHISPER_MODEL_SIZES:
             repo_id = MLX_MODEL_MAP.get(size)
             # 用 config.json 判定，和 _check_mlx_whisper_model_exists / 加载逻辑保持一致

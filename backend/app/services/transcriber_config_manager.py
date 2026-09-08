@@ -41,18 +41,44 @@ class TranscriberConfigManager:
                 "whisper_model_size",
                 os.getenv("WHISPER_MODEL_SIZE", "tiny"),
             ),
+            # 自定义 OpenAI 兼容 ASR（transcriber_type=openai-api）的连接信息
+            "openai_api_base_url": data.get(
+                "openai_api_base_url",
+                os.getenv("OPENAI_API_BASE_URL", ""),
+            ),
+            "openai_api_key": data.get(
+                "openai_api_key",
+                os.getenv("OPENAI_API_KEY", ""),
+            ),
+            "openai_api_model": data.get(
+                "openai_api_model",
+                os.getenv("OPENAI_API_MODEL", "whisper-1"),
+            ),
         }
 
     def update_config(
         self,
         transcriber_type: str,
         whisper_model_size: Optional[str] = None,
+        openai_api_base_url: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
+        openai_api_model: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """更新转写器配置并持久化。"""
+        """更新转写器配置并持久化。
+
+        新增的 openai_api_* 参数传 None 表示「这次不改动该字段」，
+        与 whisper_model_size 的语义保持一致。
+        """
         data = self._read()
         data["transcriber_type"] = transcriber_type
         if whisper_model_size is not None:
             data["whisper_model_size"] = whisper_model_size
+        if openai_api_base_url is not None:
+            data["openai_api_base_url"] = openai_api_base_url
+        if openai_api_key is not None:
+            data["openai_api_key"] = openai_api_key
+        if openai_api_model is not None:
+            data["openai_api_model"] = openai_api_model
         self._write(data)
         return self.get_config()
 

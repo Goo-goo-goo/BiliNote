@@ -7,6 +7,8 @@ from app.transcriber.groq import GroqTranscriber
 from app.transcriber.whisper import WhisperTranscriber
 from app.transcriber.bcut import BcutTranscriber
 from app.transcriber.kuaishou import KuaishouTranscriber
+from app.transcriber.openai_api import OpenAIApiTranscriber
+from app.services.transcriber_config_manager import TranscriberConfigManager
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -17,6 +19,7 @@ class TranscriberType(str, Enum):
     BCUT = "bcut"
     KUAISHOU = "kuaishou"
     GROQ = "groq"
+    OPENAI_API = "openai-api"
 
 # 在 Apple 平台尝试导入 MLX Whisper（不再依赖环境变量，支持前端动态切换）
 MLX_WHISPER_AVAILABLE = False
@@ -37,6 +40,7 @@ _transcribers = {
     TranscriberType.BCUT: None,
     TranscriberType.KUAISHOU: None,
     TranscriberType.GROQ: None,
+    TranscriberType.OPENAI_API: None,
 }
 
 # Cache instances together with their constructor configuration. The
@@ -66,6 +70,18 @@ def _init_transcriber(key: TranscriberType, cls, *args, **kwargs):
 # 各类型获取方法
 def get_groq_transcriber():
     return _init_transcriber(TranscriberType.GROQ, GroqTranscriber)
+
+def get_openai_api_transcriber():
+    """自定义 OpenAI 兼容 ASR。配置作为构造参数传入——_init_transcriber
+    会比较配置指纹，用户在前端改了地址/key/model 后会自动重建实例。"""
+    cfg = TranscriberConfigManager().get_config()
+    return _init_transcriber(
+        TranscriberType.OPENAI_API,
+        OpenAIApiTranscriber,
+        base_url=cfg.get("openai_api_base_url"),
+        api_key=cfg.get("openai_api_key"),
+        model=cfg.get("openai_api_model"),
+    )
 
 def get_whisper_transcriber(model_size="base", device="cuda"):
     return _init_transcriber(TranscriberType.FAST_WHISPER, WhisperTranscriber, model_size=model_size, device=device)
@@ -126,6 +142,9 @@ def get_transcriber(transcriber_type="fast-whisper", model_size=None, device="cu
 
     elif transcriber_enum == TranscriberType.GROQ:
         return get_groq_transcriber()
+
+    elif transcriber_enum == TranscriberType.OPENAI_API:
+        return get_openai_api_transcriber()
 
     # fallback
     logger.warning(f'未识别转录器类型 "{transcriber_type}"，使用 fast-whisper 作为默认')
