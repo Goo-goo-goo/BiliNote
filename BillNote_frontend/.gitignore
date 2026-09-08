@@ -8,7 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-# dist 不再忽略：构建产物提交进仓库，由 FastAPI 直接挂载提供前端
+# dist 构建产物改由 backend/static/frontend 跟踪提交（见根 .gitignore 例外），
+# 这里保持忽略，避免双重跟踪
+dist
 dist-ssr
 *.local
 

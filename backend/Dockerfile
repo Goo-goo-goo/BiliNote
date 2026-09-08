@@ -3,9 +3,10 @@
 #   阶段1 Python 依赖编译（清华 pypi 源）
 #   阶段2 运行时（slim + 代码 + 前端产物，FastAPI 直接服务页面）
 #
-# 注意：前端构建产物 BillNote_frontend/dist 已提交进仓库，
-#   镜像直接 COPY 使用；前端有改动后需重新 build 并提交：
+# 注意：前端构建产物已提交在 backend/static/frontend/，前端有改动后需重新
+#   build 并同步提交：
 #     cd BillNote_frontend && DOCKER_BUILD=1 pnpm build
+#     rm -rf ../backend/static/frontend && cp -R dist ../backend/static/frontend
 #
 # 构建（仓库根目录为 context）：
 #   docker build -f backend/Dockerfile -t bilinote:local .
@@ -79,12 +80,10 @@ RUN ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shangha
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV PYTHONPATH=/app/backend
 
-# 应用代码（频繁变动的层放后面）
+# 应用代码（频繁变动的层放后面）。
+# 前端静态产物已提交在 backend/static/frontend/（见根 .gitignore 例外），
+# 随 backend/ 一起 COPY 进来，main.py 直接挂载，无需 nginx/独立前端容器。
 COPY backend/ /app/backend/
-# 前端静态产物：main.py 从 backend/static/frontend 挂载（见 main.py 候选路径）。
-# 放在 static/frontend 子目录而非 static 根目录，避免 static 整体挂载
-# volume（截图持久化）时遮蔽前端文件。
-COPY BillNote_frontend/dist /app/backend/static/frontend
 
 WORKDIR /app/backend
 
