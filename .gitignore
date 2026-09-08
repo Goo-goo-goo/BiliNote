@@ -147,6 +147,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+# 例外：前端构建产物提交进仓库，由 FastAPI 挂载提供前端
+!BillNote_frontend/dist/
 downloads/
 eggs/
 .eggs/

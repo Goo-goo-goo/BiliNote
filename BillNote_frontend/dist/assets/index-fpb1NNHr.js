@@ -1,0 +1,21 @@
+import{c as a,j as e,l as n,T as l,d as r,e as c,S as d,f as h,I as x}from"./index-DFF3UShJ.js";import{L as i,O as m,k as u,b as p}from"./vendor-DBlCrKr4.js";import{u as f}from"./index-wIUi90i9.js";import"./markdown-yfrxTro1.js";import"./markmap-Dxb5swfa.js";/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const j=[["path",{d:"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",key:"169zse"}]],v=a("activity",j);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const y=[["path",{d:"M12 6V2H8",key:"1155em"}],["path",{d:"m8 18-4 4V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z",key:"w2lp3e"}],["path",{d:"M2 12h2",key:"1t8f8n"}],["path",{d:"M9 11v2",key:"1ueba0"}],["path",{d:"M15 11v2",key:"i11awn"}],["path",{d:"M20 12h2",key:"1q8mjw"}]],g=a("bot-message-square",y);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const w=[["rect",{width:"18",height:"14",x:"3",y:"5",rx:"2",ry:"2",key:"12ruh7"}],["path",{d:"M7 15h4M15 15h2M7 11h2M13 11h4",key:"1ueiar"}]],N=a("captions",w);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const k=[["path",{d:"M12 2v8",key:"1q4o3n"}],["path",{d:"m16 6-4 4-4-4",key:"6wukr"}],["rect",{width:"20",height:"8",x:"2",y:"14",rx:"2",key:"w68u3i"}],["path",{d:"M6 18h.01",key:"uhywen"}],["path",{d:"M10 18h.01",key:"h775k"}]],b=a("hard-drive-download",k),M=({Menu:s})=>e.jsx("div",{className:"h-full w-full",style:{backgroundColor:"var(--color-muted)"},children:e.jsxs("div",{className:"flex flex-1",children:[e.jsxs("aside",{className:"flex w-[300px] flex-col border-r border-neutral-200 bg-white",children:[e.jsxs("header",{className:"flex h-16 items-center justify-between px-6",children:[e.jsxs("div",{className:"flex items-center gap-2",children:[e.jsx("div",{className:"flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl",children:e.jsx("img",{src:n,alt:"logo",className:"h-full w-full object-contain"})}),e.jsx("div",{className:"text-2xl font-bold text-gray-800",children:"BiliNote"})]}),e.jsx("div",{children:e.jsx(l,{children:e.jsxs(r,{children:[e.jsx(c,{children:e.jsx(i,{to:"/",children:e.jsx(d,{className:"text-muted-foreground hover:text-primary cursor-pointer"})})}),e.jsx(h,{children:e.jsx("span",{children:"返回首页"})})]})})})]}),e.jsx("div",{className:"flex-1 overflow-auto p-4",children:s})]}),e.jsx("main",{className:"h-screen flex-1 overflow-hidden",children:e.jsx(m,{})})]})}),_="_menuBar_19xof_1",L={menuBar:_},B=({menuItem:s})=>{const t=u(),o=t.pathname.startsWith(s.path+"/")||t.pathname===s.path;return e.jsx(i,{to:s.path,className:"w-full",children:e.jsxs("div",{className:L.menuBar+" flex h-12 w-full items-center gap-1 rounded px-2"+(o?" bg-[#F0F0F0] font-semibold text-blue-600":""),children:[e.jsx("div",{className:"h-6 w-6",children:s.icon}),e.jsx("div",{className:"text-[16px]",children:s.name})]})})},S=()=>{const s=[{id:"model",name:"AI 模型设置",icon:e.jsx(g,{}),path:"/settings/model"},{id:"transcriber",name:"音频转写配置",icon:e.jsx(N,{}),path:"/settings/transcriber"},{id:"download",name:"下载配置",icon:e.jsx(b,{}),path:"/settings/download"},{id:"monitor",name:"部署监控",icon:e.jsx(v,{}),path:"/settings/monitor"},{id:"about",name:"关于",icon:e.jsx(x,{}),path:"/settings/about"}];return e.jsxs("div",{className:"flex h-full flex-col",children:[e.jsxs("div",{className:"flex w-full flex-col gap-2",children:[e.jsx("div",{className:"text-2xl font-medium",children:"设置"}),e.jsx("div",{className:"text-sm font-light text-gray-800",children:"全局配置与模型设置"})]}),e.jsx("div",{className:"mt-6 flex-1",children:s&&s.map(t=>e.jsx(B,{menuItem:t},t.id))})]})},C=()=>{const s=f(t=>t.fetchProviderList);return p.useEffect(()=>{s()},[]),e.jsx("div",{className:"h-full w-full",children:e.jsx(M,{Menu:e.jsx(S,{})})})};export{C as default};

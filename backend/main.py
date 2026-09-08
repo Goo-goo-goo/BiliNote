@@ -104,12 +104,46 @@ register_exception_handlers(app)
 app.mount(static_path, StaticFiles(directory=static_dir), name="static")
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
+# 挂载前端构建产物，让后端端口直接提供 Web 页面。
+# 前端构建时 baseURL 走相对路径 /api，与 include_router 的 /api 前缀同源，无需 CORS。
+# 必须挂在所有 API 路由之后：Starlette 按注册顺序匹配，/api、/static、/uploads
+# 先命中，剩下的才落到这里的静态文件。
+#
+# 两个候选位置（按优先级）：
+#   1. backend/static/frontend/  —— Docker 单镜像：dist 直接打进 backend 目录
+#   2. ../BillNote_frontend/dist —— 本地开发：pnpm build 的产物
+# 放在 static/frontend 子目录而非 static 根目录，是为了避免把 static 整体
+# 挂载成 volume（截图持久化）时遮蔽前端文件。
+_frontend_candidates = [
+    os.path.join(os.path.dirname(__file__), "static", "frontend"),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "BillNote_frontend", "dist")),
+]
+frontend_dist = next((p for p in _frontend_candidates if os.path.isdir(p)), None)
 
 
+class SPAStaticFiles(StaticFiles):
+    """单页应用 fallback：未知路径（如直接刷新 /settings）返回 index.html，
+    交给 React Router 处理；真实缺失的静态资源仍返回 404。
+
+    注意：Starlette 的 StaticFiles 对不存在的路径抛的是 starlette 的
+    HTTPException（FastAPI 的 HTTPException 是其子类，catch 子类抓不到父类），
+    所以这里必须 catch starlette 的，而不是检查状态码。"""
+
+    async def get_response(self, path: str, scope):
+        from starlette.exceptions import HTTPException
+
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as e:
+            if e.status_code == 404 and "." not in os.path.basename(path):
+                return await super().get_response("index.html", scope)
+            raise
 
 
-
-
+if frontend_dist and os.path.isdir(frontend_dist):
+    app.mount("/", SPAStaticFiles(directory=frontend_dist, html=True), name="frontend")
+else:
+    logger.warning(f"前端构建产物不存在，跳过静态页面挂载: {_frontend_candidates}")
 
 
 if __name__ == "__main__":
