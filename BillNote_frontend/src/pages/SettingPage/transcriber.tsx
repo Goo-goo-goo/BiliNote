@@ -33,6 +33,10 @@ export default function Transcriber() {
   const [saving, setSaving] = useState(false)
   const [selectedType, setSelectedType] = useState('')
   const [selectedModelSize, setSelectedModelSize] = useState('')
+  // 自定义 OpenAI 兼容 ASR 连接信息
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('')
+  const [openaiKey, setOpenaiKey] = useState('')
+  const [openaiModel, setOpenaiModel] = useState('')
   const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([])
   const [mlxModelStatuses, setMlxModelStatuses] = useState<ModelStatus[]>([])
   const [mlxAvailable, setMlxAvailable] = useState(false)
@@ -88,6 +92,9 @@ export default function Transcriber() {
         setConfig(data)
         setSelectedType(data.transcriber_type)
         setSelectedModelSize(data.whisper_model_size)
+        setOpenaiBaseUrl(data.openai_api_base_url || '')
+        setOpenaiKey(data.openai_api_key || '')
+        setOpenaiModel(data.openai_api_model || '')
       } catch {
         toast.error('获取转写器配置失败')
       } finally {
@@ -133,11 +140,27 @@ export default function Transcriber() {
 
     setSaving(true)
     try {
-      const payload: { transcriber_type: string; whisper_model_size?: string } = {
+      const payload: {
+        transcriber_type: string
+        whisper_model_size?: string
+        openai_api_base_url?: string
+        openai_api_key?: string
+        openai_api_model?: string
+      } = {
         transcriber_type: selectedType,
       }
       if (isWhisperType(selectedType)) {
         payload.whisper_model_size = selectedModelSize
+      }
+      if (selectedType === 'openai-api') {
+        if (!openaiBaseUrl.trim()) {
+          toast.error('请填写 ASR 服务地址')
+          setSaving(false)
+          return
+        }
+        payload.openai_api_base_url = openaiBaseUrl.trim()
+        payload.openai_api_key = openaiKey.trim()
+        payload.openai_api_model = openaiModel.trim() || 'whisper-1'
       }
       await updateTranscriberConfig(payload)
       toast.success('转写器配置已保存')
@@ -268,6 +291,42 @@ export default function Transcriber() {
               <p className="text-xs text-neutral-400">
                 模型越大精度越高，但速度更慢、占用更多显存
               </p>
+            </div>
+          )}
+
+          {selectedType === 'openai-api' && (
+            <div className="space-y-3 rounded-md border p-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">服务地址</label>
+                <Input
+                  placeholder="http://127.0.0.1:9000/v1"
+                  value={openaiBaseUrl}
+                  onChange={e => setOpenaiBaseUrl(e.target.value)}
+                  className="max-w-lg"
+                />
+                <p className="text-xs text-neutral-400">
+                  OpenAI 兼容的 ASR 服务地址（含 /v1 前缀），请求会发到 {'{地址}/audio/transcriptions'}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">API Key（可选）</label>
+                <Input
+                  type="password"
+                  placeholder="本地服务可不填"
+                  value={openaiKey}
+                  onChange={e => setOpenaiKey(e.target.value)}
+                  className="max-w-lg"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">模型名</label>
+                <Input
+                  placeholder="whisper-1"
+                  value={openaiModel}
+                  onChange={e => setOpenaiModel(e.target.value)}
+                  className="max-w-lg"
+                />
+              </div>
             </div>
           )}
 

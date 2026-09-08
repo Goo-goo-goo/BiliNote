@@ -166,7 +166,7 @@ export function MarkdownHeader({
                 <span className="text-sm">导出 Markdown</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>下载为 Markdown 文件</TooltipContent>
+            <TooltipContent>含图片时打包为 zip（图片存 assets/ 目录）</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         <TooltipProvider>

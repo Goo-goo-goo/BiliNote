@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
+import JSZip from 'jszip'
 import { Button } from '@/components/ui/button.tsx'
 import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -403,16 +404,81 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
       URL.revokeObjectURL(url)
     },
   }
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const task = getCurrentTask()
     const name = task?.audioMeta.title || 'note'
-    const blob = new Blob([selectedContent], { type: 'text/markdown;charset=utf-8' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `${name}.md`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+
+    // 提取正文里的图片链接（跳过 data: 内联图）
+    const imgUrls = [
+      ...new Set(
+        [...selectedContent.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)]
+          .map(m => m[1])
+          .filter(u => !u.startsWith('data:')),
+      ),
+    ]
+
+    const triggerSave = (blob: Blob, filename: string) => {
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(link.href)
+    }
+
+    // 没有图片：保持原逻辑，只导出 .md
+    if (imgUrls.length === 0) {
+      const blob = new Blob([selectedContent], { type: 'text/markdown;charset=utf-8' })
+      triggerSave(blob, `${name}.md`)
+      return
+    }
+
+    // 有图片：打包 zip，图片落到 assets/，md 里的链接改写为相对路径
+    const zip = new JSZip()
+    let md = selectedContent
+    const usedPaths = new Set<string>()
+    let failed = 0
+
+    for (const url of imgUrls) {
+      const abs = url.startsWith('http') ? url : window.location.origin + url
+      let blob: Blob
+      try {
+        const resp = await fetch(`/api/image_proxy?url=${encodeURIComponent(abs)}`)
+        if (!resp.ok) throw new Error(String(resp.status))
+        blob = await resp.blob()
+      } catch {
+        failed++ // 下载失败的保留原链接，不进 zip
+        continue
+      }
+
+      // 文件名：优先取 URL 路径最后一段；没有扩展名时按 content-type 补
+      let fname = decodeURIComponent(abs.split('?')[0]).split('/').pop() || ''
+      if (!/\.[a-zA-Z0-9]{2,5}$/.test(fname)) {
+        const ext = { 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/svg+xml': '.svg' }[
+          blob.type
+        ]
+        fname += ext || '.jpg'
+      }
+      // 同名去重：a.jpg → a-1.jpg
+      let assetPath = `assets/${fname}`
+      let i = 1
+      while (usedPaths.has(assetPath)) {
+        assetPath = `assets/${fname.replace(/(\.[a-zA-Z0-9]+)$/, `-${i}$1`)}`
+        i++
+      }
+      usedPaths.add(assetPath)
+
+      zip.file(assetPath, blob)
+      md = md.split(url).join(assetPath) // 该 URL 的所有引用统一改写成相对路径
+    }
+
+    zip.file(`${name}.md`, md)
+    const zipBlob = await zip.generateAsync({ type: 'blob' })
+    triggerSave(zipBlob, `${name}.zip`)
+    if (failed > 0) {
+      toast.error(`${failed} 张图片下载失败，已保留原链接`, { duration: 5000 })
+    }
   }
 
   if (status === 'loading') {

@@ -174,10 +174,11 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
     }
     try {
       setModelLoading(true) // ✅ 开始 loading
-      const res = await fetchModels(id!, { noCache: true }) // 这里稍后解释
-      if (res.data.code === 0 && res.data.data.models.data.length > 0) {
-        setModelOptions(res.data.data.models.data)
-        console.log('🔧 模型列表:', res.data.data)
+      const res = await fetchModels(id!, { noCache: true })
+      // 拦截器已解包：res 就是 {models: [...]}，不要再套 res.data.code
+      const list = res?.models
+      if (Array.isArray(list) && list.length > 0) {
+        setModelOptions(list)
         toast.success('模型列表加载成功 🎉')
       } else {
         toast.error('未获取到模型列表')

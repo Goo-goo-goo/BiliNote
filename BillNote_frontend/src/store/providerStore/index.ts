@@ -59,16 +59,14 @@ export const useProviderStore = create<ProviderStore>((set, get) => ({
       base_url: provider.baseUrl,
     }
     try {
+      // 拦截器已解包：成功时 res 就是新建的供应商对象（含 id），
+      // 不要再判 res.data.code——那个判断永远为 false，会导致添加后列表不刷新
       const res = await addProvider(payload)
-      if (res.data.code === 0) {
-        const item = res.data.data
-        console.log('Provider ', item)
-
-        await get().fetchProviderList()
-        return  item
-      }
+      await get().fetchProviderList()
+      return res
     } catch (error) {
-      console.error('Error fetching provider:', error)
+      console.error('Error adding provider:', error)
+      throw error
     }
   },
   // 按 id 获取单个 provider
