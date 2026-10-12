@@ -93,7 +93,7 @@ def get_transcriber_config():
     return R.success(data={
         **config,
         "available_types": AVAILABLE_TRANSCRIBER_TYPES,
-        # 内置可见档位 + 用户自定义模型，供前端下拉
+        # 内置可见档位 + 用户自定义模型，供调用方下拉
         "whisper_model_sizes": registry.visible_model_names(),
         "whisper_builtin_models": BUILTIN_WHISPER_MODELS,
         "whisper_custom_models": registry.get_custom_models(),
@@ -157,7 +157,7 @@ def get_proxy_config():
     from app.services.proxy_config_manager import ProxyConfigManager
     mgr = ProxyConfigManager()
     cfg = mgr.get_config()
-    # effective 给前端展示「当前实际生效的代理」——可能来自配置，也可能来自 env 兜底
+    # effective 给调用方展示「当前实际生效的代理」——可能来自配置，也可能来自 env 兜底
     return R.success(data={
         **cfg,
         "effective": mgr.get_proxy_url() or "",
@@ -177,8 +177,8 @@ def update_proxy_config(data: ProxyConfigRequest):
 
 # ---- Whisper 模型下载状态 & 下载触发 ----
 # 下载状态（downloading / done / failed + 失败原因）统一交给 model_download_state 维护，
-# 「触发下载」与「查询状态」共享同一份进程内内存态。失败原因会随状态接口透传给前端，
-# 修复 issue #402 衍生问题：原先只回传 downloading/downloaded，下载失败时前端无任何提示。
+# 「触发下载」与「查询状态」共享同一份进程内内存态。失败原因会随状态接口透传给调用方，
+# 修复 issue #402 衍生问题：原先只回传 downloading/downloaded，下载失败时调用方无任何提示。
 
 
 def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> bool:
@@ -203,6 +203,10 @@ def _check_whisper_model_exists(model_size: str, subdir: str = "whisper") -> boo
         return (Path(target) / "model.bin").exists()
 
     model_dir = Path(get_model_dir(subdir))
+    # ModelScope 本地镜像布局 {model_dir}/modelscope/{org}--{name}/
+    from app.transcriber.model_download import mirror_complete, mirror_dir
+    if mirror_complete(mirror_dir(str(model_dir), target)):
+        return True
     # HF cache 布局（适配任意 org/repo，不再写死 Systran）
     hf_repo_dir = model_dir / hf_cache_dirname(target) / "snapshots"
     if hf_repo_dir.exists():
@@ -344,8 +348,24 @@ def _do_download_whisper(model_size: str):
             return
 
         logger.info(f"开始下载 whisper 模型: {model_size} ← {target}")
-        # 跟 faster-whisper utils.py 用同样的 allow_patterns，避免多下无关文件；
-        # 不传 local_dir 让它走 HF 默认 cache 布局（与加载逻辑对齐）
+        # ModelScope 国内源优先（WHISPER_DOWNLOAD_SOURCE=modelscope 时）：
+        # 下到 {model_dir}/modelscope/{org}--{name}/ 平铺目录，加载时直接用本地路径
+        from app.transcriber.model_download import (
+            ensure_model_local,
+            hf_endpoint_override,
+        )
+        if ensure_model_local(target, model_dir) is not None:
+            logger.info(f"whisper 模型下载完成（ModelScope）: {model_size}")
+            dl_state.mark_done(model_size)
+            return
+
+        # HF 兜底：跟 faster-whisper utils.py 用同样的 allow_patterns，避免多下无关文件；
+        # 不传 local_dir 让它走 HF 默认 cache 布局（与加载逻辑对齐）。
+        # WHISPER_DOWNLOAD_SOURCE=hf-mirror / official 时强制对应 endpoint。
+        endpoint = hf_endpoint_override()
+        snapshot_kwargs = {}
+        if endpoint:
+            snapshot_kwargs["endpoint"] = endpoint
         snapshot_download(
             target,
             cache_dir=model_dir,
@@ -356,6 +376,7 @@ def _do_download_whisper(model_size: str):
                 "tokenizer.json",
                 "vocabulary.*",
             ],
+            **snapshot_kwargs,
         )
         logger.info(f"whisper 模型下载完成: {model_size}")
         dl_state.mark_done(model_size)
@@ -432,8 +453,8 @@ async def sys_health():
     """结构化健康状态——任何子项异常都不应让整个 endpoint 5xx。
 
     每个字段：'ok' | 'missing' | 'error'。
-    前端 useCheckBackend 用 /sys_check 做存活判定（不依赖外部依赖），
-    /sys_health 用来在设置页区分「后端没起」vs「后端起了但 ffmpeg 缺」vs「DB 写不进去」等更细的状态。
+    调用方可用 /sys_check 做存活判定（不依赖外部依赖），
+    /sys_health 用来区分「后端没起」vs「后端起了但 ffmpeg 缺」vs「DB 写不进去」等更细的状态。
     """
     ffmpeg_status = "ok"
     try:

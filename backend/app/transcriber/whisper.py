@@ -8,6 +8,7 @@ from app.transcriber.whisper_models import (
     is_local_target,
     hf_cache_dirname,
 )
+from app.transcriber.model_download import ensure_model_local, mirror_dir
 from app.utils.env_checker import is_cuda_available, is_torch_installed
 from app.utils.logger import get_logger
 from app.utils.path_helper import get_model_dir
@@ -64,6 +65,13 @@ class WhisperTranscriber(Transcriber):
         # 直通的 repo_id 或本地路径。faster-whisper 对本地目录走 os.path.isdir 分支，
         # 对 repo_id 走 download_model(cache_dir=download_root)，两者都吃 model_size_or_path。
         target = resolve_whisper_model(model_size)
+        if not is_local_target(target):
+            # ModelScope 国内源优先：已有镜像/下载成功则用本地目录（绕开 HF cache 布局），
+            # 失败或未启用则交回 faster-whisper 自己下载（HF_ENDPOINT 决定 hf-mirror/官方）
+            mirror = ensure_model_local(target, model_dir)
+            if mirror is not None:
+                logger.info(f"whisper-{model_size} 使用本地镜像: {mirror}")
+                target = str(mirror)
         return WhisperModel(
             model_size_or_path=target,
             device=self.device,
@@ -89,6 +97,7 @@ class WhisperTranscriber(Transcriber):
             return
         candidates = [
             Path(model_dir) / hf_cache_dirname(target),       # HF cache: models--org--name
+            mirror_dir(model_dir, target),                    # ModelScope 本地镜像
             Path(model_dir) / f"whisper-{model_size}",        # 历史 modelscope 目录，顺手清掉
         ]
         for path in candidates:
