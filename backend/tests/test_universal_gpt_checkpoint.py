@@ -34,6 +34,7 @@ def _install_stubs():
     prompt_mod.SCREENSHOT = ""
     prompt_mod.LINK = ""
     prompt_mod.MERGE_PROMPT = "merge"
+    prompt_mod.FINALIZE_PROMPT = "finalize"
 
     utils_mod = types.ModuleType("app.gpt.utils")
 
@@ -69,6 +70,8 @@ def _install_stubs():
             self.text = kwargs.get("text", "")
 
     transcriber_model_mod.TranscriptSegment = _TranscriptSegment
+    # 一并提供 TranscriptResult：downloaders/base.py 等后续测试经 setdefault 复用本 stub
+    transcriber_model_mod.TranscriptResult = type("TranscriptResult", (), {})
 
     sys.modules.setdefault("app", app_mod)
     sys.modules.setdefault("app.gpt", gpt_pkg)
@@ -80,6 +83,12 @@ def _install_stubs():
     sys.modules["app.gpt.request_chunker"] = request_chunker_mod
     sys.modules["app.models.gpt_model"] = gpt_model_mod
     sys.modules["app.models.transcriber_model"] = transcriber_model_mod
+    # universal_gpt 从 path_helper 取 checkpoint 目录，装完整 stub
+    try:
+        from tests.path_helper_stub import install_path_helper_stub
+    except ImportError:
+        from path_helper_stub import install_path_helper_stub
+    install_path_helper_stub()
 
 
 def _load_universal_gpt_class():
