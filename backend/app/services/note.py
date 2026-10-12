@@ -22,6 +22,7 @@ from app.exceptions.note import NoteError
 from app.exceptions.provider import ProviderError
 from app.gpt.base import GPT
 from app.gpt.gpt_factory import GPTFactory
+from app.gpt.note_render import note_to_markdown
 from app.models.audio_model import AudioDownloadResult
 from app.models.gpt_model import GPTSource
 from app.models.model_config import ModelConfig
@@ -29,9 +30,11 @@ from app.models.notes_model import AudioDownloadResult, NoteResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.provider import ProviderService
+from app.services import task_status
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
 from app.utils.note_helper import replace_content_markers, prepend_source_link
+from app.utils.path_helper import get_note_results_dir, get_screenshot_dir
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.status_code import StatusCode
 from app.utils.video_helper import generate_screenshot
@@ -48,10 +51,10 @@ BACKEND_PORT = os.getenv("BACKEND_PORT", "8483")
 BACKEND_BASE_URL = f"{API_BASE_URL}:{BACKEND_PORT}"
 
 # 输出目录（用于缓存音频、转写、Markdown 文件，以及存储截图）
-NOTE_OUTPUT_DIR = Path(os.getenv("NOTE_OUTPUT_DIR", "note_results"))
-NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-IMAGE_OUTPUT_DIR = os.getenv("OUT_DIR", "./static/screenshots")
-# 图片基础 URL（用于生成 Markdown 中的图片链接，需前端静态目录对应）
+# 全部落在统一数据目录（DATA_DIR）下，getter 内已自动建目录
+NOTE_OUTPUT_DIR = Path(get_note_results_dir())
+IMAGE_OUTPUT_DIR = get_screenshot_dir()
+# 图片基础 URL（用于生成 Markdown 中的图片链接，对应 static 目录）
 IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "/static/screenshots")
 
 # 日志配置
@@ -122,7 +125,7 @@ class NoteGenerator:
 
         try:
             logger.info(f"开始生成笔记 (task_id={task_id})")
-            self._update_status(task_id, TaskStatus.PARSING)
+            self._update_status(task_id, TaskStatus.PARSING, message="解析视频链接与元信息")
 
             # 获取下载器与 GPT 实例
 
@@ -199,8 +202,8 @@ class NoteGenerator:
                     task_id=task_id,
                 )
 
-            # 3. GPT 总结
-            markdown = self._summarize_text(
+            # 3. GPT 总结（结构化 note_json → 派生 Markdown）
+            markdown, note = self._summarize_text(
                 audio_meta=audio_meta,
                 transcript=transcript,
                 gpt=gpt,
@@ -211,32 +214,35 @@ class NoteGenerator:
                 style=style,
                 extras=extras,
                 video_img_urls=self.video_img_urls,
+                task_id=task_id,
             )
 
             # 4. 截图 & 链接替换
             if _format:
+                self._update_status(task_id, TaskStatus.FORMATTING, message="插入截图与原片跳转链接")
                 markdown = self._post_process_markdown(
                     markdown=markdown,
                     video_path=self.video_path,
                     formats=_format,
                     audio_meta=audio_meta,
                     platform=platform,
+                    note=note,
                 )
 
             markdown = prepend_source_link(markdown, str(video_url))
 
             # 5. 保存记录到数据库
-            self._update_status(task_id, TaskStatus.SAVING)
+            self._update_status(task_id, TaskStatus.SAVING, message="写入结果文件与任务记录")
             self._save_metadata(video_id=audio_meta.video_id, platform=platform, task_id=task_id)
 
             # 6. 完成
-            self._update_status(task_id, TaskStatus.SUCCESS)
+            self._update_status(task_id, TaskStatus.SUCCESS, message="笔记生成完成")
             logger.info(f"笔记生成成功 (task_id={task_id})")
-            return NoteResult(markdown=markdown, transcript=transcript, audio_meta=audio_meta)
+            return NoteResult(markdown=markdown, transcript=transcript, audio_meta=audio_meta, note=note)
 
         except Exception as exc:
             logger.error(f"生成笔记流程异常 (task_id={task_id})：{exc}", exc_info=True)
-            self._update_status(task_id, TaskStatus.FAILED, message=str(exc))
+            self._update_status(task_id, TaskStatus.FAILED, message=str(exc), error=str(exc))
             return None
 
     @staticmethod
@@ -311,44 +317,27 @@ class NoteGenerator:
         logger.info(f"使用下载器：{downloader_cls.__class__}")
         return instance
 
-    def _update_status(self, task_id: Optional[str], status: Union[str, TaskStatus], message: Optional[str] = None):
+    def _update_status(self, task_id: Optional[str], status: Union[str, TaskStatus],
+                       message: Optional[str] = None, detail: Optional[str] = None,
+                       progress: Optional[float] = None, error: Optional[str] = None):
         """
-        创建或更新 {task_id}.status.json，记录当前任务状态
+        更新任务运行状态（统一写入 task_status 富文档：阶段/子步骤/进度/轨迹/耗时）。
 
         :param task_id: 任务唯一 ID
         :param status: TaskStatus 枚举或自定义状态字符串
-        :param message: 可选消息，用于记录失败原因等
+        :param message: 阶段级说明（人读，如「正在生成结构化笔记」）
+        :param detail: 子步骤（如「分段总结 2/3」）
+        :param progress: 0~1 进度
+        :param error: 失败原因
         """
         if not task_id:
             return
-
-        NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        print(f"写入状态文件: {status_file} 当前状态: {status}")
-        data = {"status": status.value if isinstance(status, TaskStatus) else status}
-        if message:
-            data["message"] = message
-
         try:
-            # First create a temporary file
-            temp_file = status_file.with_suffix('.tmp')
-
-            # Write to temporary file
-            with temp_file.open('w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # Atomic rename operation
-            temp_file.replace(status_file)
-
-            print(f"状态文件写入成功: {status_file}")
-        except Exception as e:
-            logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
-            # Try to write error to file directly as fallback
-            try:
-                with status_file.open('w', encoding='utf-8') as f:
-                    f.write(f"Error writing status: {str(e)}")
-            except:
-                logger.error(f"写入错误  {e}")
+            task_status.update_status(
+                task_id, status, message=message, detail=detail, progress=progress, error=error
+            )
+        except Exception as exc:
+            logger.error(f"写入任务状态失败 (task_id={task_id})：{exc}")
 
     def _handle_exception(self, task_id, exc):
         logger.error(f"任务异常 (task_id={task_id})", exc_info=True)
@@ -358,7 +347,7 @@ class NoteGenerator:
                 error_message = json.dumps(error_message, ensure_ascii=False)
             except:
                 error_message = str(error_message)
-        self._update_status(task_id, TaskStatus.FAILED, message=error_message)
+        self._update_status(task_id, TaskStatus.FAILED, message=error_message, error=error_message)
 
     def _download_media(
         self,
@@ -394,7 +383,7 @@ class NoteGenerator:
         :return: AudioDownloadResult 对象
         """
         task_id = audio_cache_file.stem.split("_")[0]
-        self._update_status(task_id, status_phase)
+        self._update_status(task_id, status_phase, message="下载媒体与元信息")
 
         # 已有缓存，尝试加载
         if audio_cache_file.exists():
@@ -492,7 +481,7 @@ class NoteGenerator:
         :param task_id: 任务 ID
         :return: TranscriptResult 对象
         """
-        self._update_status(task_id, status_phase)
+        self._update_status(task_id, status_phase, message="获取字幕/转写内容")
 
         # 已有缓存，直接返回
         if transcript_cache_file.exists():
@@ -544,7 +533,7 @@ class NoteGenerator:
         :return: TranscriptResult 对象
         """
         task_id = transcript_cache_file.stem.split("_")[0]
-        self._update_status(task_id, status_phase)
+        self._update_status(task_id, status_phase, message="音频转写中")
 
         # 已有缓存，尝试加载
         if transcript_cache_file.exists():
@@ -580,23 +569,25 @@ class NoteGenerator:
         style: Optional[str],
         extras: Optional[str],
             video_img_urls: List[str],
-    ) -> str | None:
+            task_id: Optional[str] = None,
+    ) -> Tuple[str | None, Optional[dict]]:
         """
-        调用 GPT 对转写结果进行总结，生成 Markdown 文本并缓存。
+        调用 GPT 对转写结果进行结构化总结（note_json），并派生 Markdown 一并缓存。
 
         :param audio_meta: AudioDownloadResult 元信息
         :param transcript: TranscriptResult 转写结果
         :param gpt: GPT 实例
-        :param markdown_cache_file: Markdown 缓存路径
+        :param markdown_cache_file: Markdown 缓存路径（同目录会写 {task_id}.note.json）
         :param link: 是否在笔记中插入链接
         :param screenshot: 是否在笔记中生成截图占位
-        :param formats: 包含 'link' 或 'screenshot' 的列表
+        :param formats: 包含 'toc'/'link'/'screenshot'/'summary' 的列表
         :param style: GPT 输出风格
         :param extras: GPT 额外参数
-        :return: 生成的 Markdown 字符串
+        :param task_id: 任务 ID（用于状态文件；缺省时从缓存文件名回退）
+        :return: (派生 Markdown, note_json 字典)
         """
-        task_id = markdown_cache_file.stem
-        self._update_status(task_id, TaskStatus.SUMMARIZING)
+        task_id = task_id or markdown_cache_file.name.replace("_markdown.md", "")
+        self._update_status(task_id, TaskStatus.SUMMARIZING, message="正在生成结构化笔记")
 
         source = GPTSource(
             title=audio_meta.title,
@@ -612,10 +603,28 @@ class NoteGenerator:
         )
 
         try:
-            markdown = gpt.summarize(source)
+            def _on_progress(detail: str, fraction: float):
+                """LLM 生成进度回调：子步骤写 detail，整体进度在 0.55~0.85 间插值。"""
+                try:
+                    task_status.set_detail(task_id, detail, progress=0.55 + 0.3 * fraction)
+                except Exception:
+                    pass
+
+            note = gpt.summarize_note(source, progress_cb=_on_progress)
+            markdown = note_to_markdown(
+                note,
+                link='link' in formats,
+                screenshot='screenshot' in formats,
+                toc='toc' in formats,
+                summary='summary' in formats,
+            )
             markdown_cache_file.write_text(markdown, encoding="utf-8")
+            note_cache_file = markdown_cache_file.with_name(f"{task_id}.note.json")
+            note_cache_file.write_text(
+                json.dumps(note, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             logger.info(f"GPT 总结并缓存成功 ({markdown_cache_file})")
-            return markdown
+            return markdown, note
         except Exception as exc:
             logger.error(f"GPT 总结失败：{exc}")
             self._handle_exception(task_id, exc)
@@ -628,6 +637,7 @@ class NoteGenerator:
         formats: List[str],
         audio_meta: AudioDownloadResult,
         platform: str,
+        note: Optional[dict] = None,
     ) -> str:
         """
         对生成的 Markdown 做后期处理：插入截图和/或插入链接。
@@ -637,11 +647,12 @@ class NoteGenerator:
         :param formats: 包含 'link' 或 'screenshot' 的列表
         :param audio_meta: AudioDownloadResult 元信息，用于链接替换
         :param platform: 平台标识，用于链接替换
+        :param note: 结构化笔记（可选）；截图生成后把 image_url 回填进 screenshot 块
         :return: 处理后的 Markdown 字符串
         """
         if "screenshot" in formats and video_path:
             try:
-                markdown = self._insert_screenshots(markdown, video_path)
+                markdown = self._insert_screenshots(markdown, video_path, note=note)
             except Exception as exc:
                 logger.warning("截图插入失败，跳过该步骤")
 
@@ -653,22 +664,34 @@ class NoteGenerator:
 
         return markdown
 
-    def _insert_screenshots(self, markdown: str, video_path: Path) -> str | None | Any:
+    def _insert_screenshots(self, markdown: str, video_path: Path, note: Optional[dict] = None) -> str | None | Any:
         """
         扫描 Markdown 文本中所有 Screenshot 标记，并替换为实际生成的截图链接。
 
         :param markdown: 含有 *Screenshot-mm:ss 或 Screenshot-[mm:ss] 标记的 Markdown 文本
         :param video_path: 本地视频文件路径
+        :param note: 结构化笔记（可选）；按文档顺序把生成的 image_url 回填到 screenshot 块
         :return: 替换后的 Markdown 字符串
         """
         matches: List[Tuple[str, int]] = extract_screenshot_timestamps(markdown)
+        note_screenshot_blocks: List[dict] = []
+        if note:
+            for chapter in note.get("chapters") or []:
+                for section in chapter.get("sections") or []:
+                    for block in section.get("blocks") or []:
+                        if block.get("type") == "screenshot":
+                            note_screenshot_blocks.append(block)
+
         for idx, (marker, ts) in enumerate(matches):
             try:
                 img_path = generate_screenshot(str(video_path), str(IMAGE_OUTPUT_DIR), ts, idx)
                 filename = Path(img_path).name
-                # 构建前端可访问的 URL，例如 /static/screenshots/{filename}
+                # 构建可访问的 URL，例如 /static/screenshots/{filename}
                 img_url = f"{IMAGE_BASE_URL.rstrip('/')}/{filename}"
                 markdown = markdown.replace(marker, f"![]({img_url})", 1)
+                # 派生 Markdown 里的截图标记与 note_json 的 screenshot 块一一对应（同一渲染顺序）
+                if idx < len(note_screenshot_blocks):
+                    note_screenshot_blocks[idx]["image_url"] = img_url
             except Exception as exc:
                 logger.error(f"生成截图失败 (timestamp={ts})：{exc}")
                 # self._handle_exception(task_id, exc)

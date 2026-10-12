@@ -15,13 +15,12 @@ from app.enmus.exception import NoteErrorEnum
 from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
+from app.services import task_status
 from app.services.task_serial_executor import task_serial_executor
+from app.utils.path_helper import get_note_results_dir, get_upload_dir
 from app.utils.response import ResponseWrapper as R
 from app.utils.url_parser import extract_video_id, normalize_video_url
 from app.validators.video_url_validator import is_supported_video_url
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import StreamingResponse
-import httpx
 from app.enmus.task_status_enums import TaskStatus
 
 # from app.services.downloader import download_raw_audio
@@ -77,8 +76,8 @@ class VideoRequest(BaseModel):
         return v
 
 
-NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
-UPLOAD_DIR = "uploads"
+NOTE_OUTPUT_DIR = get_note_results_dir()
+UPLOAD_DIR = get_upload_dir()
 
 
 def save_note_to_file(task_id: str, note):
@@ -243,88 +242,62 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/tasks")
+def list_tasks(limit: int = 50):
+    """全局任务面板：所有任务的运行状态（谁在跑、第几步、在干什么、卡了多久）。"""
+    return R.success(data=task_status.list_statuses(limit=max(1, min(limit, 200))))
+
+
 @router.get("/task_status/{task_id}")
 def get_task_status(task_id: str):
-    status_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.status.json")
+    """任务运行状态（富文档）：阶段/步骤/子步骤/进度/耗时/阶段轨迹/失败原因。"""
+    status_doc = task_status.read_status(task_id)
     result_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json")
 
-    # 优先读状态文件
-    if os.path.exists(status_path):
-        with open(status_path, "r", encoding="utf-8") as f:
-            status_content = json.load(f)
-
-        status = status_content.get("status")
-        message = status_content.get("message", "")
+    # 有状态文件：返回富状态文档（含 history / progress / stale_seconds 等）
+    if status_doc:
+        status = status_doc.get("status")
 
         if status == TaskStatus.SUCCESS.value:
-            # 成功状态的话，继续读取最终笔记内容
+            payload = dict(status_doc)
             if os.path.exists(result_path):
                 with open(result_path, "r", encoding="utf-8") as rf:
-                    result_content = json.load(rf)
-                return R.success({
-                    "status": status,
-                    "result": result_content,
-                    "message": message,
-                    "task_id": task_id
-                })
+                    payload["result"] = json.load(rf)
             else:
-                # 理论上不会出现，保险处理
-                return R.success({
-                    "status": TaskStatus.PENDING.value,
-                    "message": "任务完成，但结果文件未找到",
-                    "task_id": task_id
-                })
+                # 理论上不会出现，保险处理：沿用旧契约报回排队态
+                payload["status"] = TaskStatus.PENDING.value
+                payload["message"] = "任务完成，但结果文件未找到"
+            return R.success(payload)
 
         if status == TaskStatus.FAILED.value:
-            return R.error(message or "任务失败", code=500)
+            # 保持旧的错误包结构，同时把富状态文档放进 data（history / error 可查）
+            return R.error(status_doc.get("error") or status_doc.get("message") or "任务失败",
+                           code=500, data=status_doc)
 
-        # 处理中状态
-        return R.success({
-            "status": status,
-            "message": message,
-            "task_id": task_id
-        })
+        return R.success(status_doc)
 
-    # 没有状态文件，但有结果
+    # 没有状态文件，但有结果：老任务（状态文件被清理过）
     if os.path.exists(result_path):
         with open(result_path, "r", encoding="utf-8") as f:
             result_content = json.load(f)
         return R.success({
+            "task_id": task_id,
             "status": TaskStatus.SUCCESS.value,
+            "label": TaskStatus.description(TaskStatus.SUCCESS),
+            "message": "完成",
             "result": result_content,
-            "task_id": task_id
+            "finished": True,
         })
 
-    # 什么都没有，默认PENDING
+    # 什么都没有：排队占位
     return R.success({
+        "task_id": task_id,
         "status": TaskStatus.PENDING.value,
-        "message": "任务排队中",
-        "task_id": task_id
+        "label": TaskStatus.description(TaskStatus.PENDING),
+        "message": "任务排队中（未发现状态文件）",
+        "step": 0,
+        "total_steps": 6,
+        "progress": 0.0,
+        "finished": False,
+        "history": [],
     })
-
-
-@router.get("/image_proxy")
-async def image_proxy(request: Request, url: str):
-    headers = {
-        "Referer": "https://www.bilibili.com/",
-        "User-Agent": request.headers.get("User-Agent", ""),
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, headers=headers)
-
-            if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail="图片获取失败")
-
-            content_type = resp.headers.get("Content-Type", "image/jpeg")
-            return StreamingResponse(
-                resp.aiter_bytes(),
-                media_type=content_type,
-                headers={
-                    "Cache-Control": "public, max-age=86400",  #  缓存一天
-                    "Content-Type": content_type,
-                }
-            )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
