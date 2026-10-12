@@ -2,6 +2,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import textwrap
 
 
@@ -13,6 +14,9 @@ def _run_isolated(script: str) -> None:
     env["PYTHONPATH"] = os.pathsep.join(
         filter(None, [str(ROOT), env.get("PYTHONPATH")])
     )
+    # 子进程会 import app.services.note 等模块，把数据目录指到临时目录，
+    # 避免在仓库 backend/ 下建目录树/空库
+    env.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="bilinote-fwd-"))
     result = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script)],
         cwd=ROOT,

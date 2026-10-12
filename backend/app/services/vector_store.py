@@ -7,11 +7,12 @@ import chromadb
 from chromadb.config import Settings
 
 from app.utils.logger import get_logger
+from app.utils.path_helper import get_note_results_dir, get_vector_db_dir
 
 logger = get_logger(__name__)
 
-NOTE_OUTPUT_DIR = os.getenv("NOTE_OUTPUT_DIR", "note_results")
-VECTOR_DB_DIR = os.getenv("VECTOR_DB_DIR", "vector_db")
+NOTE_OUTPUT_DIR = get_note_results_dir()
+VECTOR_DB_DIR = get_vector_db_dir()
 
 
 def _chunk_markdown(markdown: str) -> list[dict]:
@@ -105,7 +106,6 @@ class VectorStoreManager:
     """基于 ChromaDB 的笔记向量存储管理器。"""
 
     def __init__(self):
-        os.makedirs(VECTOR_DB_DIR, exist_ok=True)
         self._client = chromadb.PersistentClient(
             path=VECTOR_DB_DIR,
             settings=Settings(anonymized_telemetry=False),

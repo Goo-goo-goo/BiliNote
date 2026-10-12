@@ -56,8 +56,6 @@ class BilibiliDownloader(Downloader, ABC):
     ) -> AudioDownloadResult:
         if output_dir is None:
             output_dir = get_data_dir()
-        if not output_dir:
-            output_dir=self.cache_data
         os.makedirs(output_dir, exist_ok=True)
 
         output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
@@ -175,8 +173,6 @@ class BilibiliDownloader(Downloader, ABC):
         # 2) Fallback：原 yt-dlp 路径（更脆弱，遇到签名/Cookie 问题失败概率较高）
         if output_dir is None:
             output_dir = get_data_dir()
-        if not output_dir:
-            output_dir = self.cache_data
         os.makedirs(output_dir, exist_ok=True)
 
         if langs is None:

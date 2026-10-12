@@ -15,7 +15,7 @@ class OpenAIApiTranscriber(Transcriber, ABC):
 
     走 OpenAI SDK 的 audio.transcriptions 接口：POST {base_url}/audio/transcriptions，
     multipart 上传音频文件。base_url / api_key / model 从转写器配置读取
-    （前端「音频转写配置」页可改，持久化在 config/transcriber.json）。
+    （可通过转写器配置接口修改，持久化在 config/transcriber.json）。
     """
 
     def __init__(self, base_url: str = None, api_key: str = None, model: str = None):

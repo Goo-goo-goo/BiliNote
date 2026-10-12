@@ -12,15 +12,13 @@
 
 ## 1. 仓库结构与工作区
 
-本仓库为多工作区单体仓：
+本仓库为纯 Python 单工作区：
 
 | 路径 | 内容 | 主要命令 |
 |---|---|---|
 | `backend/` | Python 3.11 + FastAPI | `pip install -r requirements.txt && python main.py` |
-| `BillNote_frontend/` | React 19 + Vite | `pnpm install && pnpm dev` |
-| `BillNote_extension/` | Vue 3 + Vite + WebExtension MV3 | `pnpm install && pnpm dev` |
 
-详细结构与开发命令见 [CLAUDE.md](./CLAUDE.md)。提交时**单 PR 不要跨多个工作区做无关改动**，便于评审与回滚。
+详细结构与开发命令见 [CLAUDE.md](./CLAUDE.md)。
 
 ---
 
@@ -59,8 +57,6 @@ hotfix/<scope>-<事项>
 
 `<scope>` 优先用代码 scope（与 commit message scope 对齐，见 §5），常用：
 
-- `extension` — 浏览器插件（`BillNote_extension/`）
-- `frontend` — Web 前端（`BillNote_frontend/`）
 - `backend` — Python 后端（`backend/`）
 - `bilibili` / `youtube` / `douyin` / `kuaishou` — 平台特定改动
 - `transcriber` — 音频转写
@@ -87,7 +83,6 @@ release/2.2.0
 
 # 线上热修
 hotfix/backend-cors-regex
-hotfix/frontend-provider-switch
 ```
 
 ### 命名要求
@@ -210,7 +205,7 @@ chore(ci): 优化 docker 构建缓存
 
 #### scope
 
-与 §3 的分支 scope 保持一致：`extension` / `frontend` / `backend` / `bilibili` / `youtube` / `douyin` / `kuaishou` / `transcriber` / `gpt` / `chat` / `docker` / `ci` / `docs` 等。
+与 §3 的分支 scope 保持一致：`backend` / `bilibili` / `youtube` / `douyin` / `kuaishou` / `transcriber` / `gpt` / `chat` / `docker` / `ci` / `docs` 等。
 
 #### subject
 
@@ -227,7 +222,7 @@ chore(ci): 优化 docker 构建缓存
   - 改动的"做了什么"（关键文件、关键决策）
   - **测试方式**（如何验证、覆盖了哪些 case）
   - **回归风险**与影响面
-  - 是否需要后端 / 前端 / 配置同步部署
+  - 是否需要后端 / 配置同步部署
 
 ---
 
@@ -237,7 +232,7 @@ chore(ci): 优化 docker 构建缓存
 
 - 合并前必须**先同步**目标分支最新代码（`git pull --rebase` 或在 PR 上点 "Update branch"）。
 - 合并前必须完成**自测**，确保核心流程可用。
-- 后端改动需 `python -m py_compile` 至少通过；前端 / 插件改动需 `pnpm typecheck && pnpm build` 通过。
+- 后端改动需 `python -m py_compile` 至少通过；并跑 `pytest`（`backend/tests/`）确认不破坏现有行为。
 - **冲突由分支负责人解决**，不得留给评审人或发版人员。
 
 ### 6.2 评审

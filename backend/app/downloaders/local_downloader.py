@@ -9,6 +9,7 @@ from app.models.audio_model import AudioDownloadResult
 import os
 import subprocess
 
+from app.utils.path_helper import get_upload_dir
 from app.utils.video_helper import save_cover_to_static
 
 
@@ -90,9 +91,8 @@ class LocalDownloader(Downloader, ABC):
         处理本地文件路径，返回视频文件路径
         """
         if video_url.startswith('/uploads'):
-            project_root = os.getcwd()
-            video_url = os.path.join(project_root, video_url.lstrip('/'))
-            video_url = os.path.normpath(video_url)
+            rel = video_url[len('/uploads'):].lstrip('/')
+            video_url = os.path.normpath(os.path.join(get_upload_dir(), rel))
 
         if not os.path.exists(video_url):
             raise FileNotFoundError()
@@ -108,9 +108,8 @@ class LocalDownloader(Downloader, ABC):
         处理本地文件路径，返回音频元信息
         """
         if video_url.startswith('/uploads'):
-            project_root = os.getcwd()
-            video_url = os.path.join(project_root, video_url.lstrip('/'))
-            video_url = os.path.normpath(video_url)
+            rel = video_url[len('/uploads'):].lstrip('/')
+            video_url = os.path.normpath(os.path.join(get_upload_dir(), rel))
 
         if not os.path.exists(video_url):
             raise FileNotFoundError(f"本地文件不存在: {video_url}")

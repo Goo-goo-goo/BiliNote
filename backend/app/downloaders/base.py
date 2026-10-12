@@ -6,7 +6,6 @@ from typing import Optional, Union
 from app.enmus.note_enums import DownloadQuality
 from app.models.notes_model import AudioDownloadResult
 from app.models.transcriber_model import TranscriptResult
-from os import getenv
 QUALITY_MAP = {
     "fast": "32",
     "medium": "64",
@@ -31,7 +30,6 @@ class Downloader(ABC):
     def __init__(self):
         #TODO 需要修改为可配置
         self.quality = QUALITY_MAP.get('fast')
-        self.cache_data=getenv('DATA_DIR')
 
     @abstractmethod
     def download(self, video_url: str, output_dir: str = None,

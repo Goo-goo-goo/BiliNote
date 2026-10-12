@@ -25,8 +25,6 @@ class KuaiShouDownloader(Downloader, ABC):
     ) -> AudioDownloadResult:
         if output_dir is None:
             output_dir = get_data_dir()
-        if not output_dir:
-            output_dir = self.cache_data
         os.makedirs(output_dir, exist_ok=True)
 
         ks = KuaiShou()

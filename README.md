@@ -52,10 +52,6 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 
 ## 📝 使用文档
 详细文档可以查看[这里](https://docs.bilinote.app/)
-## 📦 桌面版下载
-本项目提供了 Windows 和 macOS 桌面客户端，可在 [Releases](https://github.com/JefferyHcool/BiliNote/releases) 页面下载最新版本。
-
-> Windows 用户请注意：一定要在没有中文路径的环境下运行。
 
 ## 💎 BiliNote AI笔记系统一对一搭建服务
 
@@ -175,20 +171,17 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 ```bash
 docker pull ghcr.io/jefferyhcool/bilinote:latest
 
-docker run -d -p 80:80 \
-  -v bilinote-data:/app/backend/data \
-  -v bilinote-config:/app/backend/config \
-  -v bilinote-static:/app/backend/static \
-  -v bilinote-models:/app/backend/models \
+docker run -d -p 8080:8483 \
+  -v bilinote-data:/app/data \
   --name bilinote \
   ghcr.io/jefferyhcool/bilinote:latest
 ```
 
-上面四个卷分别持久化：`data`（SQLite 数据库 + 生成的笔记）、`config`（LLM 供应商配置 / Cookie / 转写设置）、`static`（笔记引用的视频截图）、`models`（Whisper 模型缓存，可选，避免每次重新下载）。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
+只挂载一个数据卷 `/app/data`，所有持久化内容都在其下自动创建：SQLite 数据库、LLM 供应商配置 / Cookie / 转写设置、视频截图、上传视频、生成的笔记、RAG 向量索引、Whisper 模型缓存。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
 
-> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂上面这些数据子目录即可。
+> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂 `/app/data` 即可。
 
-访问：`http://localhost`
+访问：`http://localhost:8080`
 
 也可以使用 docker-compose 本地构建：
 
@@ -206,7 +199,7 @@ docker-compose -f docker-compose.gpu.yml up --build -d
 
 **0. 国内拉不到 docker.io（build 阶段报 `dial tcp ... i/o timeout`）**
 
-`docker-compose build` 拉 `python:3.11-slim` / `node:20-alpine` / `nginx:1.25-alpine` 时连 `auth.docker.io` 超时。三种解法，按推荐顺序：
+`docker-compose build` 拉 `python:3.11-slim` 基础镜像时连 `auth.docker.io` 超时。三种解法，按推荐顺序：
 
 - **方法 A：直接用预构建镜像（最省事）**——不要本地 build，跳到上面的 `docker pull ghcr.io/jefferyhcool/bilinote:latest` 路径，ghcr.io 在国内通常比 docker.io 顺。
 - **方法 B：配置 Docker daemon 镜像加速器**——编辑 `~/.docker/daemon.json`（Linux 在 `/etc/docker/daemon.json`），加：
@@ -231,31 +224,30 @@ docker-compose -f docker-compose.gpu.yml up --build -d
 ```bash
 docker logs -f bilinote-backend
 ```
-后端启动会按顺序打印 `[startup 1/5] ... [startup 5/5] 启动完成`。若日志卡在某一步或出现 `[startup FAILED]`，就是那一步的问题，常见：
-- **卡在 `[startup 3/5]`**：转写器配置读不到。检查 `.env` 里 `TRANSCRIBER_TYPE` 是否写错，`mlx-whisper` 只能在 Apple Silicon 用，Linux/Docker 请用 `fast-whisper` 或 `groq`。
-- **首次跑视频时容器被 kill**：whisper 模型下载触发 OOM。先把 `.env` 里 `WHISPER_MODEL_SIZE` 改成 `tiny`，跑通后再去前端「音频转写配置」里逐档升。
+后端启动会按顺序打印 `[startup 1/6] ... [startup 6/6] 启动完成`。若日志卡在某一步或出现 `[startup FAILED]`，就是那一步的问题，常见：
+- **卡在 `[startup 4/6]`**：转写器配置读不到。检查 `.env` 里 `TRANSCRIBER_TYPE` 是否写错，`mlx-whisper` 只能在 Apple Silicon 用，Linux/Docker 请用 `fast-whisper` 或 `groq`。
+- **首次跑视频时容器被 kill**：whisper 模型下载触发 OOM。先把 `.env` 里 `WHISPER_MODEL_SIZE` 改成 `tiny`，跑通后再通过 `/api` 的转写配置接口逐档升。
 
 **2. 改了 `.env` 没生效**
 
-区分两类变量：
-- `VITE_*` 是**构建时**变量（前端 bundle 里硬编码），改完必须 `docker-compose build frontend && docker-compose up -d`。只 `restart` 不会重新打包。
-- 其他后端变量（`TRANSCRIBER_TYPE`、`WHISPER_MODEL_SIZE`、`FFMPEG_BIN_PATH` 等）是**运行时**变量，改完 `docker-compose up -d` 即可。
+`.env` 里全部是**运行时**变量（`TRANSCRIBER_TYPE`、`WHISPER_MODEL_SIZE`、`FFMPEG_BIN_PATH` 等），改完 `docker-compose up -d` 即可。
 
-注意：**LLM API key 不要写 `.env`**，从前端「模型供应商」页面录入，会保存到 SQLite 数据库并持久化。
+注意：**LLM API key 不要写 `.env`**，通过 `/api` 下的供应商接口录入，会保存到 SQLite 数据库并持久化。
 
 **3. 数据存在哪？删容器会丢吗？**
 
-`docker-compose` 用的是 `./backend:/app` 绑挂，下面这些文件都在宿主机的 `./backend/` 目录里、删容器不会丢：
-- `./backend/bili_note.db` —— SQLite 库（含 LLM 供应商配置、笔记历史）
-- `./backend/config/transcriber.json` —— 转写器运行时配置
-- `./backend/static/screenshots/` —— 视频截图
-- `./backend/uploads/` —— 上传的本地视频
+`docker-compose` 只挂载 `./data:/app/data`，所有数据都在宿主机的 `./data/` 目录里、删容器不会丢：
+- `./data/bili_note.db` —— SQLite 库（含 LLM 供应商配置、笔记历史）
+- `./data/config/` —— 转写器/代理/Cookie 运行时配置
+- `./data/static/screenshots/` —— 视频截图
+- `./data/uploads/` —— 上传的本地视频
+- `./data/models/` —— Whisper 模型缓存
 
-要彻底重置就 `docker-compose down && rm backend/bili_note.db backend/config/transcriber.json`。
+要彻底重置就 `docker-compose down && rm -rf data/`。
 
-**4. 前端打开是空白页 / 报 502**
+**4. 打开是空白页 / 连不上**
 
-通常是 nginx 起来了但 backend 还没 healthy。`docker ps` 看 backend 容器 STATUS 是不是 `(healthy)`；若长期 `(unhealthy)`，按问题 1 排查后端日志。
+`docker ps` 看 backend 容器 STATUS 是不是 `(healthy)`；若长期 `(unhealthy)`，按问题 1 排查后端日志。
 
 **5. 不要用 `restart: on-failure:N`**
 
@@ -279,15 +271,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-#### 3. 启动前端（Vite + React）
-
-```bash
-cd BillNote_frontend
-pnpm install
-pnpm dev
-```
-
-访问：`http://localhost:3015`
+服务监听 `http://localhost:8483`，接口文档见 `http://localhost:8483/docs`（纯 Python API 服务，无内置前端）。
 
 ## ⚙️ 依赖说明
 
@@ -330,7 +314,7 @@ docker-compose -f docker-compose.gpu.yml up --build -d   # 用 GPU 栈重建
 ```
 
 - GPU 栈用 `backend/Dockerfile.gpu`（CUDA 12.4.1 + cuDNN 基础镜像，并额外装 torch 用于 CUDA 检测），compose 已声明 `deploy...devices: nvidia` 自动透传 GPU。
-- **数据不丢**：两套 compose 都把 `./backend` 整目录绑挂进容器，数据库 / 配置 / 已下载模型都保留。
+- **数据不丢**：两套 compose 都只挂载 `./data:/app/data`，数据库 / 配置 / 已下载模型都在其中。
 - 首次构建较大较慢（CUDA 基础镜像数 GB + torch），耐心等。
 
 **3. 启用并确认**
@@ -353,20 +337,17 @@ docker-compose -f docker-compose.gpu.yml up --build -d   # 用 GPU 栈重建
 docker pull ghcr.io/jefferyhcool/bilinote:latest
 
 # 运行容器
-docker run -d -p 80:80 \
-  -v bilinote-data:/app/backend/data \
-  -v bilinote-config:/app/backend/config \
-  -v bilinote-static:/app/backend/static \
-  -v bilinote-models:/app/backend/models \
+docker run -d -p 8080:8483 \
+  -v bilinote-data:/app/data \
   --name bilinote \
   ghcr.io/jefferyhcool/bilinote:latest
 ```
 
-上面四个卷分别持久化：`data`（SQLite 数据库 + 生成的笔记）、`config`（LLM 供应商配置 / Cookie / 转写设置）、`static`（笔记引用的视频截图）、`models`（Whisper 模型缓存，可选，避免每次重新下载）。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
+只挂载一个数据卷 `/app/data`，所有持久化内容（数据库、配置、截图、笔记、模型缓存）都在其下自动创建。这样 `docker pull` 升级新镜像、删旧容器重建后，配置和历史都不会丢。
 
-> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂上面这些数据子目录即可。
+> ⚠️ **不要**用 `-v 卷名:/app/backend` 挂整个后端目录——命名卷会用首次启动时的镜像内容固化，之后 `docker pull` 升级也会被旧代码盖住，导致「升级不生效」。只挂 `/app/data` 即可。
 
-访问：`http://localhost`
+访问：`http://localhost:8080`
 
 也可以使用 docker-compose 本地构建：
 

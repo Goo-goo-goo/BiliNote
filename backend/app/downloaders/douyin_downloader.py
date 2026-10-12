@@ -220,8 +220,6 @@ class DouyinDownloader(Downloader):
             )
             if output_dir is None:
                 output_dir = get_data_dir()
-            if not output_dir:
-                output_dir = self.cache_data
             os.makedirs(output_dir, exist_ok=True)
 
             output_path = os.path.join(output_dir, "%(id)s.%(ext)s")
@@ -264,8 +262,6 @@ class DouyinDownloader(Downloader):
 
             if output_dir is None:
                 output_dir = get_data_dir()
-            if not output_dir:
-                output_dir = self.cache_data
             os.makedirs(output_dir, exist_ok=True)
 
             video_id = self.extract_video_id(video_url)

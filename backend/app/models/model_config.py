@@ -8,7 +8,7 @@ class ModelConfig:
     """
     存储每个模型提供商的调用参数信息，用于从数据库读取并动态构建 GPT 调用实例。
     """
-    name: str                   # 展示名，如 "GPT-4 Turbo"（用于前端展示）
+    name: str                   # 展示名，如 "GPT-4 Turbo"（用于展示）
     provider: str               # 模型提供商，如 "openai"、"qwen"、"deepseek"
     api_key: str                # 调用该模型使用的 API Key
     base_url: str               # 模型 API 接口地址（OpenAI SDK兼容）

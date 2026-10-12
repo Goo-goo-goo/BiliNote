@@ -29,6 +29,12 @@ def _load_module():
         logger_mod = types.ModuleType("app.utils.logger")
         logger_mod.get_logger = lambda name=None: logging.getLogger(name or "test")
         sys.modules["app.utils.logger"] = logger_mod
+    # 完整 path_helper stub（覆盖先前测试留下的残缺 stub）；本测试显式传 filepath
+    try:
+        from tests.path_helper_stub import install_path_helper_stub
+    except ImportError:
+        from path_helper_stub import install_path_helper_stub
+    install_path_helper_stub()
     spec = importlib.util.spec_from_file_location("whisper_models_under_test", MODULE_PATH)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)

@@ -21,7 +21,7 @@ class TranscriberType(str, Enum):
     GROQ = "groq"
     OPENAI_API = "openai-api"
 
-# 在 Apple 平台尝试导入 MLX Whisper（不再依赖环境变量，支持前端动态切换）
+# 在 Apple 平台尝试导入 MLX Whisper（不再依赖环境变量，支持运行时动态切换）
 MLX_WHISPER_AVAILABLE = False
 if platform.system() == "Darwin":
     try:
@@ -44,7 +44,7 @@ _transcribers = {
 }
 
 # Cache instances together with their constructor configuration. The
-# transcriber choice and Whisper model size can be changed from the frontend,
+# transcriber choice and Whisper model size can be changed via the config API,
 # so caching by transcriber type alone would keep using the first loaded model.
 _transcriber_configs = {key: None for key in _transcribers}
 _transcriber_init_lock = threading.Lock()
@@ -73,7 +73,7 @@ def get_groq_transcriber():
 
 def get_openai_api_transcriber():
     """自定义 OpenAI 兼容 ASR。配置作为构造参数传入——_init_transcriber
-    会比较配置指纹，用户在前端改了地址/key/model 后会自动重建实例。"""
+    会比较配置指纹，用户通过 API 改了地址/key/model 后会自动重建实例。"""
     cfg = TranscriberConfigManager().get_config()
     return _init_transcriber(
         TranscriberType.OPENAI_API,
@@ -119,8 +119,8 @@ def get_transcriber(transcriber_type="fast-whisper", model_size=None, device="cu
         logger.warning(f'未知转录器类型 "{transcriber_type}"，默认使用 fast-whisper')
         transcriber_enum = TranscriberType.FAST_WHISPER
 
-    # The explicit value normally comes from the persisted frontend setting and
-    # must take precedence over Docker's startup default.
+    # The explicit value normally comes from the persisted config (transcriber.json)
+    # and must take precedence over Docker's startup default.
     whisper_model_size = model_size or os.environ.get("WHISPER_MODEL_SIZE", "base")
 
     if transcriber_enum == TranscriberType.FAST_WHISPER:

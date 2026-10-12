@@ -1,21 +1,20 @@
 # ===============================================================
-# = 单镜像：前后端一体
+# = 纯 Python API 服务镜像
 #   阶段1 Python 依赖编译（清华 pypi 源）
-#   阶段2 运行时（slim + 代码 + 前端产物，FastAPI 直接服务页面）
-#
-# 注意：前端构建产物已提交在 static/frontend/，前端有改动后需重新 build 并同步：
-#     cd BillNote_frontend && DOCKER_BUILD=1 pnpm build
-#     rm -rf ../backend/static/frontend && cp -R dist ../backend/static/frontend
+#   阶段2 运行时（slim + 代码，FastAPI 提供 API）
 #
 # 构建（context 就是 backend/ 目录，见 .dockerignore 排除运行时文件）：
 #   cd backend && docker build -t bilinote:local .
+#   docker run -d -p 8483:8483 -e DATA_DIR=/app/data -v ./data:/app/data bilinote:local
 #
-# 数据目录（建议挂载持久化）：
-#   /app/backend/bili_note.db           — SQLite 数据库
-#   /app/backend/config/                — 转写器等运行时配置
-#   /app/backend/static/screenshots/    — 视频截图
-#   /app/backend/uploads/               — 上传的本地视频
-#   /app/backend/models/                — 本地 whisper 模型
+# 数据目录：只挂载一个路径 /app/data（DATA_DIR），子目录启动时自动创建：
+#   /app/data/bili_note.db        — SQLite 数据库
+#   /app/data/config/             — 转写器/代理/Cookie 等运行时配置
+#   /app/data/static/screenshots/ — 视频截图；static/cover/ — 封面
+#   /app/data/uploads/            — 上传的本地视频
+#   /app/data/note_results/       — 任务笔记与缓存；vector_db/ — RAG 向量索引
+#   /app/data/downloads/          — 音视频下载缓存
+#   /app/data/models/             — 本地 whisper 模型
 # ===============================================================
 
 # ===============================================================
@@ -78,10 +77,10 @@ RUN ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shangha
 # HuggingFace 走国内镜像（whisper 模型下载）
 ENV HF_ENDPOINT=https://hf-mirror.com
 ENV PYTHONPATH=/app/backend
+# 统一数据目录：所有持久化数据（db/config/uploads/static/note_results/...）都在其下
+ENV DATA_DIR=/app/data
 
 # 应用代码（频繁变动的层放后面）。
-# 前端静态产物已提交在 static/frontend/（见根 .gitignore 例外），
-# 随代码一起 COPY 进来，main.py 直接挂载，无需 nginx/独立前端容器。
 COPY . /app/backend/
 
 WORKDIR /app/backend

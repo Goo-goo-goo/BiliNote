@@ -32,8 +32,9 @@ def _install_stubs():
 
     logger_mod.get_logger = _get_logger
 
-    path_helper_mod = types.ModuleType("app.utils.path_helper")
     ffmpeg_mod = types.ModuleType("ffmpeg")
+    # 说明：path_helper stub 用共享工厂装全量 getter，避免残缺 stub 污染
+    # 同进程里后续测试的 from app.utils.path_helper import X
 
     pil_mod = types.ModuleType("PIL")
     pil_image_mod = types.ModuleType("PIL.Image")
@@ -64,7 +65,6 @@ def _install_stubs():
     def _get_app_dir(name):
         return name
 
-    path_helper_mod.get_app_dir = _get_app_dir
     ffmpeg_mod.probe = lambda *_args, **_kwargs: {"format": {"duration": "0"}}
 
     sys.modules.setdefault("app", app_mod)
@@ -75,7 +75,12 @@ def _install_stubs():
     sys.modules["PIL.ImageFont"] = pil_font_mod
     sys.modules["ffmpeg"] = ffmpeg_mod
     sys.modules["app.utils.logger"] = logger_mod
-    sys.modules["app.utils.path_helper"] = path_helper_mod
+    # 全量 getter 的 path_helper stub，仅覆盖本测试依赖特殊行为的 get_app_dir
+    try:
+        from tests.path_helper_stub import install_path_helper_stub
+    except ImportError:
+        from path_helper_stub import install_path_helper_stub
+    install_path_helper_stub(get_app_dir=_get_app_dir)
 
 
 def _load_video_reader_module():

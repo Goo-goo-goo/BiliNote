@@ -48,7 +48,12 @@ def _load_downloader_module(monkeypatch):
         "app.services.proxy_config_manager",
         ProxyConfigManager=type("ProxyConfigManager", (), {"get_proxy_url": lambda self: None}),
     )
-    _stub(monkeypatch, "app.utils.path_helper", get_data_dir=lambda: "/tmp")
+    # 完整 path_helper stub（保留 monkeypatch 的自动还原语义）
+    try:
+        from tests.path_helper_stub import make_path_helper_stub
+    except ImportError:
+        from path_helper_stub import make_path_helper_stub
+    monkeypatch.setitem(sys.modules, "app.utils.path_helper", make_path_helper_stub())
     _stub(monkeypatch, "app.utils.url_parser", extract_video_id=lambda url, platform: "video-id")
 
     spec = importlib.util.spec_from_file_location("youtube_downloader_under_test", MODULE_PATH)

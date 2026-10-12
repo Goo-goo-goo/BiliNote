@@ -6,7 +6,7 @@ routers.config 的「触发下载」与「查询状态」共享这份进程内�
 
 为什么抽成独立的轻量模块（仅依赖 logger）：
   1) 把原先散落在 config.py 多处的字符串状态赋值收敛到一处，避免拼写漂移；
-  2) 失败原因能透传到 /transcriber_models_status → 前端，修复「下载失败前端无任何
+  2) 失败原因能透传到 /transcriber_models_status，修复「下载失败调用方无任何
      提示、状态一直显示未下载」（issue #402 的衍生问题：原先状态接口只回传
      downloading/downloaded 两个布尔，failed 态被直接丢弃）；
   3) 不引入 faster_whisper / ctranslate2 等重依赖，可被单测隔离加载。
@@ -55,7 +55,7 @@ def get_error(key: str) -> Optional[str]:
 
 
 def status_row(name: str, downloaded: bool, key: Optional[str] = None) -> dict:
-    """构造单个模型给前端的状态行：downloaded / downloading / failed (+error)。
+    """构造单个模型的状态行（供状态接口返回）：downloaded / downloading / failed (+error)。
 
     key 默认用 name；mlx 传 "mlx-{size}"。已下载成功（downloaded=True）的模型
     一律不回传 failed/error——避免「先失败后又下好」时残留旧的错误状态。

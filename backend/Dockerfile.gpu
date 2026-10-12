@@ -15,6 +15,8 @@ RUN rm -f /etc/apt/sources.list && \
     rm -rf /var/lib/apt/lists/*
 
 ENV HF_ENDPOINT=https://hf-mirror.com
+# 统一数据目录：所有持久化数据都在其下（配合 -v ./data:/app/data）
+ENV DATA_DIR=/app/data
 
 WORKDIR /app
 

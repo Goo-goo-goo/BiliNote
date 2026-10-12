@@ -95,7 +95,7 @@ class ModelService:
           1. 直接捕获 /models 的真实异常（不再二次吞）；
           2. normalize_models 兼容 SyncPage / list / dict，绝不再 `.data` 崩；
           3. 动态拿不到（失败或空）时退回内置已知清单，保证下拉非空；
-          4. 仍然为空且确有报错时，把报错带回去（前端可提示，不再假装成功）。
+          4. 仍然为空且确有报错时，把报错带回去（调用方可提示，不再假装成功）。
         """
         from app.services.model_fallback import (
             builtin_fallback_models,
@@ -138,7 +138,7 @@ class ModelService:
         """连通性测试：发一条最小化 chat completion。
 
         model 优先级：
-          1. 调用方显式传入（前端可在「模型选择」UI 里挑一个再测）
+          1. 调用方显式传入（可指定模型名再测）
           2. DB 中该 provider 已保存的第一个模型
           3. 都没有 → 抛错让用户先加一个模型
         """

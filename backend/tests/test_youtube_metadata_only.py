@@ -71,7 +71,12 @@ def _load_youtube_downloader():
             "ProxyConfigManager", (), {"get_proxy_url": lambda self: None}
         ),
     )
-    _stub("app.utils.path_helper", get_data_dir=lambda: "/tmp")
+    # 完整 path_helper stub（覆盖上一个测试留下的同名 stub，避免残缺 getter 污染）
+    try:
+        from tests.path_helper_stub import install_path_helper_stub
+    except ImportError:
+        from path_helper_stub import install_path_helper_stub
+    install_path_helper_stub()
     _stub("app.utils.url_parser", extract_video_id=lambda url, platform: "vid")
 
     spec = importlib.util.spec_from_file_location("youtube_downloader", MODULE_PATH)

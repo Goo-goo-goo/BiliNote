@@ -79,7 +79,7 @@ def normalize_models(raw: Any) -> List[dict]:
 
 
 def as_model_dicts(model_ids: List[str], owned_by: str = "") -> List[dict]:
-    """把模型名列表包成与 SDK Model 一致的 dict，前端下拉直接复用同一套渲染。"""
+    """把模型名列表包成与 SDK Model 一致的 dict，调用方可直接复用同一套渲染。"""
     return [
         {"id": mid, "object": "model", "created": None, "owned_by": owned_by}
         for mid in model_ids

@@ -12,5 +12,5 @@ class TranscriptSegment:
 class TranscriptResult:
     language: Optional[str]         # 检测语言（如 "zh"、"en"）
     full_text: str                  # 完整合并后的文本（用于摘要）
-    segments: List[TranscriptSegment]  # 分段结构，适合前端显示时间轴字幕等
+    segments: List[TranscriptSegment]  # 分段结构，适合按时间轴展示字幕等
     raw: Optional[dict] = None      # 原始响应数据，便于调试或平台特性处理

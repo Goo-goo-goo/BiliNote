@@ -17,9 +17,10 @@
 import json
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.utils.logger import get_logger
+from app.utils.path_helper import get_config_dir
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,7 @@ BUILTIN_WHISPER_MODELS: Dict[str, str] = {
     "large-v3-turbo": "deepdml/faster-whisper-large-v3-turbo-ct2",
 }
 
-# 前端下拉默认展示的内置档位（保持与历史 WHISPER_MODEL_SIZES 一致，不把 8 个全列出来）
+# 模型列表接口默认展示的内置档位（保持与历史 WHISPER_MODEL_SIZES 一致，不把 8 个全列出来）
 DEFAULT_VISIBLE_BUILTINS: List[str] = ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo"]
 
 
@@ -64,8 +65,8 @@ def hf_cache_dirname(repo_id: str) -> str:
 class WhisperModelRegistry:
     """内置 + 用户自定义的 whisper 模型映射，自定义部分持久化到 JSON。"""
 
-    def __init__(self, filepath: str = "config/whisper_models.json"):
-        self.path = Path(filepath)
+    def __init__(self, filepath: Optional[str] = None):
+        self.path = Path(filepath or os.path.join(get_config_dir(), "whisper_models.json"))
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     # ---- 持久化 ----
@@ -95,7 +96,7 @@ class WhisperModelRegistry:
         return self._read_custom()
 
     def visible_model_names(self) -> List[str]:
-        """给前端下拉 / 下载状态用：默认可见内置档位 + 全部自定义名称。"""
+        """给模型列表接口 / 下载状态用：默认可见内置档位 + 全部自定义名称。"""
         names = list(DEFAULT_VISIBLE_BUILTINS)
         for name in self._read_custom():
             if name not in names:
@@ -149,13 +150,16 @@ class WhisperModelRegistry:
         return data
 
 
-# 模块级单例
-_registry = WhisperModelRegistry()
+# 惰性单例：首次调用才实例化（构造会建 config/ 目录，避免 import 副作用）
+_registry: Optional[WhisperModelRegistry] = None
 
 
 def get_registry() -> WhisperModelRegistry:
+    global _registry
+    if _registry is None:
+        _registry = WhisperModelRegistry()
     return _registry
 
 
 def resolve_whisper_model(name: str) -> str:
-    return _registry.resolve(name)
+    return get_registry().resolve(name)

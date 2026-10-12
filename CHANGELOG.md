@@ -2,6 +2,31 @@
 
 本项目所有重要变更记录于此。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- **统一数据目录：Docker 只需挂载一个路径**（`./data:/app/data`，env `DATA_DIR=/app/data`）。所有持久化数据都在其下自动创建子目录：`bili_note.db`、`config/`、`uploads/`、`static/screenshots/`、`static/cover/`、`note_results/`、`vector_db/`、`downloads/`、`models/`、`logs/`。路径派生统一收敛到 `app/utils/path_helper.py`（相对路径按 backend 项目根解析，不再依赖启动时 cwd），顺带消灭了旧 `get_data_dir()` 的 `data/data` 双层怪癖。
+- **删除全部 nginx 相关内容**：compose 改为单服务（FastAPI 一个端口直接服务 API + SPA 页面），移除 frontend/nginx 服务、`nginx/` 目录、`BillNote_frontend/Dockerfile`、`BillNote_frontend/deploy/`；`Dockerfile.complete` 去掉 nginx+supervisord，改单进程 `python main.py`（`--env-file` 直达，不再有 env 透传丢失问题）。
+- docker-compose 修复现存构建断裂：build context 修正为 `./backend`（原 `context: .` 配 `COPY requirements.txt` 无法构建）。
+- 废除环境变量 `NOTE_OUTPUT_DIR`、`VECTOR_DB_DIR`、`OUT_DIR`（无兼容层）；保留 `DATABASE_URL`（换 PostgreSQL/MySQL 用）与 URL 前缀 `STATIC`、`IMAGE_BASE_URL`。
+
+### ⚠️ 升级须知（旧数据手工迁移）
+
+数据落点全部变更，**不做自动迁移**。从旧版本升级时请手工搬文件到新数据目录（Docker 下即宿主机 `./data/`，本地开发即 `backend/data/`）：
+
+| 旧位置（相对 backend/ 或容器 /app） | 新位置 |
+|---|---|
+| `bili_note.db` | `data/bili_note.db` |
+| `config/` | `data/config/` |
+| `static/screenshots/` | `data/static/screenshots/` |
+| `uploads/` | `data/uploads/` |
+| `note_results/` | `data/note_results/` |
+| `models/` | `data/models/` |
+| `vector_db/` | `data/vector_db/` |
+
+另：docker-compose 原先绑挂 `./backend:/app`，升级后改挂 `./data:/app/data`；预构建镜像端口从 80 改为 8483（`docker run -p 8080:8483`）。
+
 ## [2.4.4] - 2026-06-23
 
 ### Security

@@ -1,4 +1,5 @@
-
+# GPU 单服务部署：与 docker-compose.yml 相同的单挂载布局，另加 NVIDIA 设备。
+# 注意 Dockerfile.gpu 是仓库根作构建 context 的写法。
 services:
   backend:
     container_name: bilinote-backend
@@ -15,11 +16,12 @@ services:
     environment:
       - BACKEND_PORT=${BACKEND_PORT}
       - BACKEND_HOST=${BACKEND_HOST}
+      - DATA_DIR=/app/data
+    ports:
+      - "${APP_PORT}:${BACKEND_PORT}"
     volumes:
-      # 同 docker-compose.yml：./backend 绑到 /app，DB / 转写器配置 / 截图 / 上传都持久化
-      - ./backend:/app
-    expose:
-      - "${BACKEND_PORT}"  # 不再对外暴露，用于 nginx 内部通信
+      # 唯一数据挂载，布局见 docker-compose.yml 的注释
+      - ./data:/app/data
     # 用 unless-stopped 避免短暂崩溃把容器永久打死后再也读不到 .env 修改
     restart: unless-stopped
     healthcheck:
@@ -37,32 +39,3 @@ services:
             - driver: "nvidia"
               count: "all"
               capabilities: ["gpu"]
-
-  frontend:
-    container_name: bilinote-frontend
-    build:
-      context: .
-      dockerfile: BillNote_frontend/Dockerfile
-      args:
-        BASE_REGISTRY: ${BASE_REGISTRY:-docker.io}
-    env_file:
-      - .env
-    expose:
-      - "80"  # 不暴露给宿主机，只供 nginx 访问
-    restart: unless-stopped
-    mem_limit: 512m
-
-  nginx:
-    container_name: bilinote-nginx
-    image: nginx:1.25-alpine
-    ports:
-      - "${APP_PORT}:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_started
-    restart: unless-stopped
-    mem_limit: 256m

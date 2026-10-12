@@ -3,17 +3,19 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from app.utils.path_helper import get_config_dir
+
 
 class ProxyConfigManager:
-    """全局代理配置，存 JSON 文件，支持前端动态修改。
+    """全局代理配置，存 JSON 文件，支持通过 API 动态修改。
 
     作用范围：LLM API + 转写 API（Groq 等）+ yt-dlp 视频下载。
     优先级：配置文件里 enabled=true 的 url > 环境变量 HTTP_PROXY/HTTPS_PROXY/ALL_PROXY。
     这样桌面端/web 用户在设置页填，docker/服务器部署用环境变量兜底。
     """
 
-    def __init__(self, filepath: str = "config/proxy.json"):
-        self.path = Path(filepath)
+    def __init__(self, filepath: Optional[str] = None):
+        self.path = Path(filepath or os.path.join(get_config_dir(), "proxy.json"))
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _read(self) -> Dict[str, Any]:

@@ -1,12 +1,19 @@
 import os
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
+from app.utils.path_helper import get_db_path
+
 load_dotenv()
 
-# 默认 SQLite，如果想换 PostgreSQL 或 MySQL，可以直接改 .env
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bili_note.db")
+# 默认 SQLite 落在统一数据目录（DATA_DIR）下；想换 PostgreSQL 或 MySQL
+# 可以直接改 .env 的 DATABASE_URL 覆盖。
+# Path.as_posix() 保证 POSIX 下拼出 sqlite:////abs/path（4 斜杠）、
+# Windows 下拼出 sqlite:///C:/...，都是 SQLAlchemy 的正确形态。
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{Path(get_db_path()).as_posix()}"
 
 # SQLite 需要特定连接参数，其他数据库不需要
 engine_args = {}
