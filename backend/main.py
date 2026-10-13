@@ -91,15 +91,17 @@ async def lifespan(app: FastAPI):
         logger.exception("[startup FAILED] 后端启动期异常，详见堆栈；容器会退出并由 restart 策略决定是否重试")
         raise
 
-    yield
+    # MCP（Streamable HTTP）会话管理与应用同生命周期
+    from app.mcp_server import mcp as mcp_server
+
+    async with mcp_server.session_manager.run():
+        yield
 
 app = create_app(lifespan=lifespan)
 
-# 允许的源：本地客户端（curl/脚本/本地工具）。
-# 项目为纯 Python API 服务；如需给远程前端开 CORS，改这里的正则或自行加中间件。
-CORS_ORIGIN_REGEX = (
-    r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
-)
+# 允许的源：默认全部放行（本地工具、远程前端、浏览器扩展、MCP 客户端都可直连）。
+# 需要收紧时用 CORS_ORIGIN_REGEX 环境变量指定来源正则（如 "^https://my\.app$"）。
+CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX", r".*")
 
 app.add_middleware(
     CORSMiddleware,
@@ -119,6 +121,14 @@ app.mount("/uploads", StaticFiles(directory=get_upload_dir()), name="uploads")
 @app.get("/", include_in_schema=False)
 def root():
     return PlainTextResponse("BiliNote API is running. See /docs for API documentation.")
+
+
+# MCP 入口（Streamable HTTP）：AI 客户端配 http://<host>:8483/mcp 即可直连。
+# Mount("") 兜底未命中路径，让 /mcp 精确命中（不产生 307 重定向）；
+# 必须放在所有具体路由之后，避免遮住 /api、/docs 等。
+from app.mcp_server import mcp as mcp_server
+
+app.mount("", mcp_server.streamable_http_app())
 
 
 if __name__ == "__main__":

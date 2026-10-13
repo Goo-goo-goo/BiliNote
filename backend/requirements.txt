@@ -128,3 +128,7 @@ youtube-transcript-api>=1.0.0
 yt-dlp>=2026.7.4
 zopfli==0.2.3.post1
 qrcode
+# MCP 服务（/mcp Streamable HTTP 入口，见 app/mcp_server.py）。
+# 钉死版本：mcp 高版本会把 starlette 拖到 1.x，与 FastAPI 0.116（starlette<0.48）冲突。
+mcp==1.21.0
+sse-starlette==3.0.3
