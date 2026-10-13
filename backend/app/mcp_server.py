@@ -151,14 +151,18 @@ def list_notes(limit: int = 20) -> Dict[str, Any]:
                 meta = result.get("audio_meta") or {}
             except Exception:
                 meta = {}
-        note = note_store.load_note(task_id) or {}
+        markdown = note_store.load_note_markdown(task_id) or ""
+        title = meta.get("title") or task_id
+        for line in markdown.splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip() or title
+                break
         items.append({
             "task_id": task_id,
-            "title": note.get("title") or meta.get("title") or task_id,
+            "title": title,
             "platform": meta.get("platform"),
             "duration": meta.get("duration"),
             "updated_at": doc.get("updated_at"),
-            "tags": note.get("tags") or [],
         })
         if len(items) >= limit:
             break
@@ -172,15 +176,14 @@ def get_task_status(task_id: str) -> Dict[str, Any]:
     if not doc:
         return {"error": f"找不到任务 {task_id}"}
     doc = dict(doc)
-    doc["note_ready"] = doc.get("status") == "SUCCESS" and note_store.load_note(task_id) is not None
+    doc["note_ready"] = doc.get("status") == "SUCCESS" and note_store.load_note_markdown(task_id) is not None
     return doc
 
 
 @mcp.tool()
 def get_note(task_id: str) -> Dict[str, Any]:
-    """读取一篇结构化笔记：note_json（章节/小节/公式/表格）+ 派生 Markdown。"""
-    note = note_store.load_note(task_id)
+    """读取一篇笔记的 Markdown 正文（含时间跳转/截图标记的后处理结果）。"""
     markdown = note_store.load_note_markdown(task_id)
-    if not note and not markdown:
+    if not markdown:
         return {"error": f"找不到笔记 {task_id}（任务可能未完成）"}
-    return {"task_id": task_id, "note": note, "markdown": markdown}
+    return {"task_id": task_id, "markdown": markdown}

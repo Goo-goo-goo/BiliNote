@@ -84,8 +84,8 @@ export default function Dashboard() {
     if (!providerId) return
     api
       .modelListByProvider(providerId)
-      .then((list) => {
-        const names = list.map((m) => m.id)
+      .then((r) => {
+        const names = r.models.map((m) => m.id)
         setModels(names)
         if (!names.includes(modelName)) setModelName(names[0] || '')
       })
@@ -143,8 +143,8 @@ export default function Dashboard() {
     <div className="page">
       {/* 工作台 hero：贴链接即主操作 */}
       <div className="hero">
-        <div className="hero-title">把视频，变成带时间戳的结构化笔记。</div>
-        <div className="hero-sub">贴一个链接，从下载一路走到自测与复习。</div>
+        <div className="hero-title">把视频，变成带时间戳的 Markdown 笔记。</div>
+        <div className="hero-sub">贴一个链接，从下载一路走到结构化笔记。</div>
 
         <div className="hero-form">
           <div className="hero-field">
@@ -166,7 +166,7 @@ export default function Dashboard() {
           {platform ? `识别为 ${platformLabel(platform)}` : '支持 B站 / YouTube / 抖音 / 快手'}
         </div>
         {error && <p className="inline-error">{error}</p>}
-        <div className="hero-flow">下载 → 转写 → 结构化笔记 → 自测 · 错题 → 复习</div>
+        <div className="hero-flow">下载 → 转写 → Markdown 笔记</div>
       </div>
 
       <Panel

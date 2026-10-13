@@ -1,8 +1,8 @@
-"""笔记生成主链路端到端测试。
+"""笔记生成主链路端到端测试（pipeline: markdown-v2）。
 
 覆盖真实编排代码：状态富文档推进 → 跳下载取元信息 → 转写缓存命中 →
-LLM map-reduce（真实 UniversalGPT 编排 + 假 OpenAI 客户端返回预置 JSON）→
-note_json 派生 Markdown → 链接标记替换 → 落盘 → NoteResult。
+LLM map-reduce（真实 UniversalGPT 编排 + 假 OpenAI 客户端返回预置 Markdown）→
+Markdown 直出（无 JSON 校验）→ 链接标记替换 → 落盘 → NoteResult。
 只有两个外部依赖是假件：下载器、LLM HTTP 客户端。
 """
 import json
@@ -22,25 +22,24 @@ from app.utils.path_helper import get_note_results_dir
 
 TASK_ID = "e2e-task-1"
 
-MAP_JSON = {"sections": [
-    {"type": "detail", "heading": "核心概念", "time_stamp": "00:00:10", "important": True,
-     "blocks": [{"type": "text", "content": "这是概念讲解"}]},
-]}
+MAP_MD = (
+    "### ⭐ 核心概念 *Content-[00:00:10]\n\n"
+    "这是概念讲解。"
+)
 
-NOTE_JSON = {
-    "title": "端到端测试笔记",
-    "summary": "一句话核心结论。",
-    "chapters": [
-        {"title": "第一章", "time_stamp": "00:00:10", "intro": "导读",
-         "sections": [
-             {"type": "detail", "heading": "核心概念", "time_stamp": "00:00:10", "important": True,
-              "blocks": [{"type": "text", "content": "这是概念讲解"}]},
-         ],
-         "summary": "本章小结", "key_points": ["要点一"]},
-    ],
-    "key_takeaways": ["结论一", "结论二"],
-    "tags": ["AI", "测试"],
-}
+FINAL_MD = (
+    "# 端到端测试笔记\n\n"
+    "> 一句话核心结论。\n\n"
+    "## 1. 第一章 *Content-[00:00:10]\n\n"
+    "### 1.1 ⭐ 核心概念 *Content-[00:00:10]\n\n"
+    "这是概念讲解。\n\n"
+    "> **本章小结**：本章小结\n\n"
+    "**本章要点**\n\n"
+    "- 要点一\n\n"
+    "## 核心要点\n\n"
+    "- 结论一\n"
+    "- 结论二\n"
+)
 
 
 class _FakeCompletions:
@@ -52,10 +51,7 @@ class _FakeCompletions:
     def create(self, **kwargs):
         self.calls.append(kwargs)
         prompt = json.dumps(kwargs.get("messages", []), ensure_ascii=False)
-        if "整理成整篇视频笔记" in prompt:
-            content = json.dumps(NOTE_JSON, ensure_ascii=False)
-        else:
-            content = json.dumps(MAP_JSON, ensure_ascii=False)
+        content = FINAL_MD if "整理成整篇视频笔记" in prompt else MAP_MD
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
         )
@@ -111,33 +107,31 @@ class TestNotePipelineE2E(unittest.TestCase):
             task_id=TASK_ID,
             link=True,
             screenshot=False,
-            _format=["toc", "link", "summary"],
+            _format=["link", "summary"],
             style="detailed",
         )
 
-        # 1) 结构化笔记是源真值
+        # 1) Markdown 直出是源真值（无 note_json）
         self.assertIsNotNone(result)
-        self.assertEqual(result.note["title"], "端到端测试笔记")
-        self.assertEqual(result.note["chapters"][0]["sections"][0]["heading"], "核心概念")
-
-        # 2) 派生 Markdown：标题/目录/要点/AI 总结齐全，时间标记已换成原片跳转链接
         md = result.markdown
         self.assertIn("# 端到端测试笔记", md)
-        self.assertIn("## 目录", md)
         self.assertIn("核心要点", md)
-        self.assertIn("## AI 总结", md)
-        self.assertNotIn("*Content-", md)          # 标记已被替换
-        self.assertIn("原片 @ 00:10", md)           # 跳转链接生成
+        self.assertIn("这是概念讲解。", md)
+
+        # 2) 时间标记已替换成原片跳转链接
+        self.assertNotIn("*Content-", md)
+        self.assertIn("原片 @ 00:00:10", md)
         self.assertIn("t=10", md)
 
         # 3) map-reduce 编排真实发生：至少 1 次 map + 1 次 finalize
         prompts = [json.dumps(c.get("messages", []), ensure_ascii=False)
                    for c in client.chat.completions.calls]
-        self.assertTrue(any("小节笔记" in p for p in prompts))
+        self.assertTrue(any("Markdown 笔记小节" in p for p in prompts))
         self.assertTrue(any("整理成整篇视频笔记" in p for p in prompts))
 
-        # 4) 状态富文档：完整阶段轨迹 + 终态
+        # 4) 状态富文档：完整阶段轨迹 + 终态 + 视频标题
         doc = task_status.read_status(TASK_ID)
+        self.assertEqual(doc["title"], "测试视频")  # 列表页据此显示标题而不是 task_id
         self.assertEqual(doc["status"], TaskStatus.SUCCESS.value)
         self.assertTrue(doc["finished"])
         self.assertEqual(doc["step"], 6)
@@ -146,13 +140,14 @@ class TestNotePipelineE2E(unittest.TestCase):
         self.assertIn("SUMMARIZING", history_statuses)
         self.assertEqual(history_statuses[-1], "SUCCESS")
 
-        # 5) 路由层同款落盘（save_note_to_file）：结果文件含 note 字段，checkpoint 已清理；
-        #    任务记录已写入 DB
+        # 5) 路由层同款落盘（save_note_to_file）：结果文件只有 markdown/transcript/audio_meta，
+        #    checkpoint 已清理；任务记录已写入 DB
         save_note_to_file(TASK_ID, result)
         result_file = note_dir / f"{TASK_ID}.json"
         self.assertTrue(result_file.exists())
         saved = json.loads(result_file.read_text(encoding="utf-8"))
-        self.assertEqual(saved["note"]["title"], "端到端测试笔记")
+        self.assertIn("# 端到端测试笔记", saved["markdown"])
+        self.assertNotIn("note", saved)
         self.assertFalse((note_dir / f"{TASK_ID}.gpt.checkpoint.json").exists())
         self.assertEqual(get_task_by_video("BV1xx", "bilibili"), TASK_ID)
 

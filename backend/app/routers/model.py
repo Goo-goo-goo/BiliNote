@@ -39,7 +39,7 @@ def model_list(provider_id):
 def create_model(data: CreateModelRequest):
     success = ModelService.add_new_model(data.provider_id, data.model_name)
     if not success:
-        return R.error("模型添加失败")
+        return R.error("模型添加失败：该供应商下已存在同名模型，或供应商不存在")
     return R.success(msg="模型添加成功")
 
 @router.get("/model_enable/{provider_id}")

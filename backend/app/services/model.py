@@ -151,7 +151,7 @@ class ModelService:
         if not provider.get('api_key'):
             raise ProviderError(
                 code=ProviderErrorEnum.NOT_FOUND.code,
-                message=ProviderErrorEnum.NOT_FOUND.message,
+                message=f"{provider.get('name') or id} 未配置 API Key，请先在「设置 → 模型供应商」编辑该供应商并填入 API Key 后再测试",
             )
 
         if not model:

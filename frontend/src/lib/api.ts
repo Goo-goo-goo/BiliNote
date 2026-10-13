@@ -55,8 +55,41 @@ function json(body: unknown): RequestInit {
 
 // ---------------------------------------------------------------- 类型
 
+/** B 站扫码登录：GET /api/bili_qrcode */
+export interface BiliQrcode {
+  qrcode_key: string
+  qr_png_base64: string
+  login_url: string
+}
+
+/** 扫码状态：GET /api/bili_qrcode/status（success 时后端已自动把 cookie 存进下载配置） */
+export interface BiliQrcodeStatus {
+  status: 'pending' | 'scanned' | 'expired' | 'success'
+  cookie: string | null
+}
+
+/** 模型条目（OpenAI /v1/models 形状，id 即模型名） */
+export interface ModelListItem {
+  id: string
+  object?: string
+  owned_by?: string
+}
+
+/** /api/model_list/{provider_id} 返回 {models, error?}；兼容旧版裸数组 */
+export interface ModelListResult {
+  models: ModelListItem[]
+  error?: string
+}
+
+function normalizeModelList(raw: ModelListResult | ModelListItem[] | null | undefined): ModelListResult {
+  if (Array.isArray(raw)) return { models: raw }
+  if (raw && Array.isArray(raw.models)) return raw
+  return { models: [], error: raw?.error }
+}
+
 export interface TaskStatusDoc {
   task_id: string
+  title?: string
   status: string
   label: string
   step: number
@@ -69,51 +102,13 @@ export interface TaskStatusDoc {
   elapsed_seconds: number
   stale_seconds: number
   finished: boolean
-  history: { status: string; label: string; message: string; at: string; elapsed: number }[]
+  history?: { status: string; label: string; message: string; at: string; elapsed: number }[]
   error?: string | null
   result?: NoteResultFile
 }
 
-export interface NoteBlock {
-  type: string
-  content?: string
-  items?: string[]
-  ordered?: boolean
-  language?: string
-  headers?: string[]
-  rows?: string[][]
-  time_stamp?: string
-  image_url?: string
-}
-
-export interface NoteSection {
-  type: string
-  heading: string
-  time_stamp?: string
-  important?: boolean
-  blocks: NoteBlock[]
-}
-
-export interface NoteChapter {
-  title: string
-  time_stamp?: string
-  intro?: string
-  sections: NoteSection[]
-  summary?: string
-  key_points?: string[]
-}
-
-export interface NoteJson {
-  title: string
-  summary?: string
-  chapters: NoteChapter[]
-  key_takeaways?: string[]
-  tags?: string[]
-}
-
 export interface NoteResultFile {
   markdown: string
-  note: NoteJson | null
   audio_meta?: {
     title: string
     video_id: string
@@ -155,71 +150,6 @@ export interface CollectionItem {
   learning_status: 'unlearned' | 'learning' | 'completed'
 }
 
-export interface QuizQuestion {
-  id: number
-  task_id: string
-  collection_id: number | null
-  qtype: 'single' | 'judge' | 'fill' | 'calc'
-  difficulty: 'basic' | 'medium' | 'advanced'
-  stem: string
-  options: string[]
-  answer: string
-  explanation: string
-  knowledge_point: string
-  time_stamp: string
-}
-
-export interface WrongAnswer {
-  id: number
-  question_id: number | null
-  task_id: string
-  qtype: string
-  question: string
-  user_answer: string
-  correct_answer: string
-  explanation: string
-  feedback: string
-  knowledge_point: string
-  time_stamp: string
-  status: 'active' | 'mastered'
-  wrong_count: number
-}
-
-export interface ReviewMaterial {
-  id: number
-  collection_id: number
-  title: string
-  detail_mode: 'full' | 'brief'
-  status: 'pending' | 'processing' | 'done' | 'failed'
-  progress: string
-  error: string
-  content?: ReviewContent
-}
-
-export interface ReviewContent {
-  title: string
-  summary: string
-  goals: string[]
-  chapters: {
-    title: string
-    intro: string
-    sections: { heading: string; content: string }[]
-    exercises: QuizQuestion[]
-  }[]
-  confusions: { pair: string; difference: string }[]
-  glossary: { term: string; meaning: string }[]
-  cards: { front: string; back: string }[]
-}
-
-export interface GradeResult {
-  correct: boolean | null
-  answer: string
-  feedback: string
-  graded_by: 'local' | 'ai' | 'none'
-  wrong_record?: WrongAnswer
-  cleared_wrong_count?: number
-}
-
 // ---------------------------------------------------------------- 接口
 
 export const api = {
@@ -235,12 +165,20 @@ export const api = {
   addProvider: (payload: { name: string; type: string; base_url: string; api_key: string; logo?: string }) =>
     request<Provider>('/api/add_provider', json(payload)),
   listProviders: () => request<Provider[]>('/api/get_all_providers'),
-  updateProvider: (payload: Record<string, unknown>) => request('/api/update_provider', json(payload)),
+  updateProvider: (payload: {
+    id: string
+    name?: string
+    base_url?: string
+    api_key?: string
+    logo?: string
+    type?: string
+    enabled?: number
+  }) => request('/api/update_provider', json(payload)),
   connectTest: (id: string, model?: string) =>
     request('/api/connect_test', json({ id, model })),
   modelList: () => request<{ id: string }[]>('/api/model_list'),
   modelListByProvider: (providerId: string) =>
-    request<{ id: string }[]>(`/api/model_list/${providerId}`),
+    request<ModelListResult | ModelListItem[]>(`/api/model_list/${providerId}`).then(normalizeModelList),
   addModel: (payload: { provider_id: string; model_name: string }) =>
     request('/api/models', json(payload)),
   deleteModel: (modelId: string) => request(`/api/models/delete/${modelId}`),
@@ -260,35 +198,6 @@ export const api = {
   setItemStatus: (itemId: number, learning_status: string) =>
     request(`/api/collection/items/${itemId}/status`, json({ learning_status })),
 
-  // 自测题 / 错题本
-  generateQuiz: (taskId: string, model_name: string, provider_id: string, per_tier = 3, collection_id?: number) =>
-    request<{ count: number; questions: QuizQuestion[] }>(
-      '/api/quiz/generate',
-      json({ task_id: taskId, model_name, provider_id, per_tier, collection_id }),
-    ),
-  quizQuestions: (taskId: string) => request<QuizQuestion[]>(`/api/quiz/questions/${taskId}`),
-  gradeQuestion: (payload: {
-    question_id?: number
-    question?: Partial<QuizQuestion>
-    user_answer: string
-    model_name?: string
-    provider_id?: string
-  }) => request<GradeResult>('/api/quiz/grade', json(payload)),
-  variantQuestion: (questionId: number, model_name: string, provider_id: string) =>
-    request<QuizQuestion>('/api/quiz/variant', json({ question_id: questionId, model_name, provider_id })),
-  listWrong: (activeOnly = 1, taskId?: string) =>
-    request<WrongAnswer[]>(`/api/quiz/wrong?active_only=${activeOnly}${taskId ? `&task_id=${taskId}` : ''}`),
-  masterWrong: (id: number) => request(`/api/quiz/wrong/${id}/master`, json({})),
-  deleteWrong: (id: number) => request(`/api/quiz/wrong/${id}`, { method: 'DELETE' }),
-
-  // 复习资料
-  generateReview: (collection_id: number, model_name: string, provider_id: string, detail_mode: 'full' | 'brief') =>
-    request<ReviewMaterial>('/api/review/generate', json({ collection_id, model_name, provider_id, detail_mode })),
-  listReviews: (collectionId?: number) =>
-    request<ReviewMaterial[]>(`/api/review/list${collectionId ? `?collection_id=${collectionId}` : ''}`),
-  getReview: (id: number) => request<ReviewMaterial>(`/api/review/${id}`),
-  deleteReview: (id: number) => request(`/api/review/${id}`, { method: 'DELETE' }),
-
   // 转写器 / 下载 / 代理 / 健康
   transcriberConfig: () => request<Record<string, unknown>>('/api/transcriber_config'),
   updateTranscriberConfig: (payload: Record<string, unknown>) =>
@@ -306,6 +215,10 @@ export const api = {
     request('/api/proxy_config', json(payload)),
   sysHealth: () => request<Record<string, unknown>>('/api/sys_health'),
   sysCheck: () => request<Record<string, unknown>>('/api/sys_check'),
+  // B 站扫码登录（Web / 通用）
+  biliQrcode: () => request<BiliQrcode>('/api/bili_qrcode'),
+  biliQrcodeStatus: (qrcodeKey: string) =>
+    request<BiliQrcodeStatus>(`/api/bili_qrcode/status?qrcode_key=${encodeURIComponent(qrcodeKey)}`),
   downloaderCookie: (platform: string) =>
     request<Record<string, unknown>>(`/api/get_downloader_cookie/${platform}`),
   updateDownloaderCookie: (payload: { platform: string; cookie: string }) =>

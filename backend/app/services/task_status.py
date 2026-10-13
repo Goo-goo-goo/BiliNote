@@ -93,6 +93,7 @@ def _base_doc(task_id: str) -> Dict:
     now = _now_iso()
     return {
         "task_id": task_id,
+        "title": "",
         "status": TaskStatus.PENDING.value,
         "label": _label(TaskStatus.PENDING.value),
         "step": 0,
@@ -108,6 +109,39 @@ def _base_doc(task_id: str) -> Dict:
 
 
 # ---------------------------------------------------------------- 写入
+
+# 老任务的状态文档没有 title 字段：从结果包 audio_meta.title 兜底（读一次即缓存）
+_TITLE_CACHE: Dict[str, str] = {}
+
+
+def _title_fallback(task_id: str) -> str:
+    if task_id in _TITLE_CACHE:
+        return _TITLE_CACHE[task_id]
+    result_path = Path(get_note_results_dir()) / f"{task_id}.json"
+    title = ""
+    try:
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+        title = str((data.get("audio_meta") or {}).get("title") or "").strip()
+    except Exception:
+        title = ""
+    if title:
+        _TITLE_CACHE[task_id] = title
+    return title
+
+
+def set_title(task_id: Optional[str], title: Optional[str]) -> None:
+    """补写任务的视频标题（元信息就绪后调用）；列表页据此显示标题而不是 task_id。"""
+    if not task_id or not (title or "").strip():
+        return
+    cleaned = title.strip()
+    _TITLE_CACHE[task_id] = cleaned
+    with _STATUS_LOCK:
+        doc = _read_doc(task_id)
+        if not doc:
+            return
+        doc["title"] = cleaned
+        _write_doc(task_id, doc)
+
 
 def update_status(task_id: Optional[str], status, message: Optional[str] = None,
                   detail: Optional[str] = None, progress: Optional[float] = None,
@@ -224,6 +258,7 @@ def list_statuses(limit: int = 50) -> List[Dict]:
             continue
         result.append({
             "task_id": task_id,
+            "title": doc.get("title") or _title_fallback(task_id),
             "status": doc.get("status"),
             "label": doc.get("label"),
             "step": doc.get("step"),
@@ -236,6 +271,8 @@ def list_statuses(limit: int = 50) -> List[Dict]:
             "updated_at": doc.get("updated_at"),
             "finished": doc.get("finished"),
             "error": doc.get("error"),
+            # 任务详情面板要展示阶段轨迹；条目少（每阶段一条），随列表返回
+            "history": doc.get("history", []),
         })
     result.sort(key=lambda d: str(d.get("updated_at") or ""), reverse=True)
     return result[:limit]

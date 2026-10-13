@@ -1,13 +1,12 @@
-"""导出层（P3）：结构化内容 → Markdown / 打印友好 HTML。
+"""导出层（P3）：Markdown 笔记 → 打印友好 HTML。
 
 只做 HTML + Markdown 两种格式（无 Pandoc / headless 浏览器等外部依赖）。
 HTML 内嵌轻量样式并用 KaTeX CDN 渲染 $...$ 公式，浏览器直接打印即可成 PDF。
+（自测 / 错题 / 复习资料功能已下线，复习资料渲染随之移除。）
 """
 import html
 import re
 from typing import List
-
-_QTYPE_LABEL = {"single": "单选", "judge": "判断", "fill": "填空", "calc": "计算/简答"}
 
 _KATEX_CDN = (
     '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">\n'
@@ -30,28 +29,8 @@ blockquote { border-left: 4px solid #388bfd66; background: #f6f8fa; margin: .8re
 code { background: #f0f1f3; padding: .1rem .35rem; border-radius: 4px; font-size: .92em; }
 pre { background: #f6f8fa; padding: .8rem 1rem; border-radius: 6px; overflow-x: auto; }
 pre code { background: none; padding: 0; }
-.badge { display: inline-block; background: #eef2f6; color: #3a424b; border-radius: 10px;
-         padding: 0 .55em; font-size: .8em; margin-left: .4em; }
-.takeaway { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: .8rem 1.1rem; }
-.exercise { border: 1px solid #d0d7de; border-radius: 8px; padding: .7rem 1rem; margin: .7rem 0; }
-.answer { color: #1a7f37; font-weight: 600; }
-.card-table td:first-child { width: 34%; font-weight: 600; }
-@media print { body { margin: 0 auto; } h2 { page-break-after: avoid; } .exercise { page-break-inside: avoid; } }
+@media print { body { margin: 0 auto; } h2 { page-break-after: avoid; } }
 """
-
-
-# ---------------------------------------------------------------- 文本
-
-def _inline_html(text: str) -> str:
-    """最小内联 Markdown → HTML：转义 + **加粗** + `code`，$公式$原样留给 KaTeX。"""
-    out = html.escape(text or "")
-    out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
-    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
-    return out
-
-
-def _inline_md(text: str) -> str:
-    return text or ""
 
 
 def _page(title: str, body: str) -> str:
@@ -62,174 +41,128 @@ def _page(title: str, body: str) -> str:
     )
 
 
-# ---------------------------------------------------------------- 复习资料
-
-def review_to_markdown(content: dict) -> str:
-    lines: List[str] = [f"# {content.get('title') or '复习资料'}", ""]
-    if content.get("summary"):
-        lines += [content["summary"], ""]
-    if content.get("goals"):
-        lines += ["## 学习目标", ""]
-        lines += [f"- {g}" for g in content["goals"]]
-        lines.append("")
-
-    for i, ch in enumerate(content.get("chapters") or [], start=1):
-        lines += [f"## {i}. {ch.get('title', '')}", ""]
-        if ch.get("intro"):
-            lines += [f"> {ch['intro']}", ""]
-        for sec in ch.get("sections") or []:
-            lines += [f"### {sec.get('heading', '')}", ""]
-            lines += [_inline_md(sec.get("content", "")), ""]
-        exercises = ch.get("exercises") or []
-        if exercises:
-            lines += ["### 章节测试", ""]
-            for j, q in enumerate(exercises, start=1):
-                label = _QTYPE_LABEL.get(q.get("qtype"), "题目")
-                lines.append(f"{j}. （{label}）{q.get('stem', '')}")
-                for opt in q.get("options") or []:
-                    lines.append(f"   - {opt}")
-            lines.append("")
-
-    if content.get("confusions"):
-        lines += ["## 易混辨析", ""]
-        lines += ["| 易混点 | 辨析 |", "| --- | --- |"]
-        lines += [f"| {c.get('pair', '')} | {c.get('difference', '')} |" for c in content["confusions"]]
-        lines.append("")
-
-    if content.get("glossary"):
-        lines += ["## 术语索引", ""]
-        lines += ["| 术语 | 释义 |", "| --- | --- |"]
-        lines += [f"| {t.get('term', '')} | {t.get('meaning', '')} |" for t in content["glossary"]]
-        lines.append("")
-
-    if content.get("cards"):
-        lines += ["## 速记卡", ""]
-        lines += ["| 正面 | 背面 |", "| --- | --- |"]
-        lines += [f"| {c.get('front', '')} | {c.get('back', '')} |" for c in content["cards"]]
-        lines.append("")
-
-    # 答案与解析
-    answered = [(i + 1, j + 1, q) for i, ch in enumerate(content.get("chapters") or [])
-                for j, q in enumerate(ch.get("exercises") or [])]
-    if answered:
-        lines += ["## 参考答案", ""]
-        for ci, qi, q in answered:
-            lines.append(f"- 第 {ci} 章第 {qi} 题：**{q.get('answer', '')}**"
-                         + (f"（{q.get('explanation', '')}）" if q.get("explanation") else ""))
-        lines.append("")
-
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def _exercise_html(q: dict) -> str:
-    label = _QTYPE_LABEL.get(q.get("qtype"), "题目")
-    parts = [f'<div class="exercise"><p><span class="badge">{label}</span> {_inline_html(q.get("stem", ""))}</p>']
-    if q.get("options"):
-        opts = "".join(f"<li>{_inline_html(o)}</li>" for o in q["options"])
-        parts.append(f"<ol>{opts}</ol>")
-    answer = _inline_html(q.get("answer", ""))
-    explanation = _inline_html(q.get("explanation", ""))
-    parts.append(f'<p class="answer">答案：{answer}</p>')
-    if explanation:
-        parts.append(f"<p>解析：{explanation}</p>")
-    parts.append("</div>")
-    return "\n".join(parts)
-
-
-def review_to_html(content: dict) -> str:
-    body: List[str] = [f"<h1>{_inline_html(content.get('title') or '复习资料')}</h1>"]
-    if content.get("summary"):
-        body.append(f"<blockquote>{_inline_html(content['summary'])}</blockquote>")
-    if content.get("goals"):
-        body.append("<h2>学习目标</h2><ul>" + "".join(f"<li>{_inline_html(g)}</li>" for g in content["goals"]) + "</ul>")
-
-    for i, ch in enumerate(content.get("chapters") or [], start=1):
-        body.append(f"<h2>{i}. {_inline_html(ch.get('title', ''))}</h2>")
-        if ch.get("intro"):
-            body.append(f"<blockquote>{_inline_html(ch['intro'])}</blockquote>")
-        for sec in ch.get("sections") or []:
-            body.append(f"<h3>{_inline_html(sec.get('heading', ''))}</h3>")
-            for para in re.split(r"\n{2,}", sec.get("content", "") or ""):
-                if para.strip():
-                    body.append(f"<p>{_inline_html(para.strip())}</p>")
-        exercises = ch.get("exercises") or []
-        if exercises:
-            body.append("<h3>章节测试</h3>")
-            body.extend(_exercise_html(q) for q in exercises)
-
-    def _table(headers: List[str], rows: List[List[str]], css: str = "") -> str:
-        head = "".join(f"<th>{h}</th>" for h in headers)
-        body_rows = "".join("<tr>" + "".join(f"<td>{_inline_html(c)}</td>" for c in row) + "</tr>" for row in rows)
-        return f'<table class="{css}"><thead><tr>{head}</tr></thead><tbody>{body_rows}</tbody></table>'
-
-    if content.get("confusions"):
-        body.append("<h2>易混辨析</h2>")
-        body.append(_table(["易混点", "辨析"], [[c.get("pair", ""), c.get("difference", "")] for c in content["confusions"]]))
-    if content.get("glossary"):
-        body.append("<h2>术语索引</h2>")
-        body.append(_table(["术语", "释义"], [[t.get("term", ""), t.get("meaning", "")] for t in content["glossary"]]))
-    if content.get("cards"):
-        body.append("<h2>速记卡</h2>")
-        body.append(_table(["正面", "背面"], [[c.get("front", ""), c.get("back", "")] for c in content["cards"]], css="card-table"))
-
-    return _page(content.get("title") or "复习资料", "\n".join(body))
-
-
 # ---------------------------------------------------------------- 单篇笔记
 
-def note_to_html(note: dict, markdown_hint: str = "") -> str:
-    """note_json → HTML。markdown_hint 仅用于无章节时的兜底文本展示。"""
-    body: List[str] = [f"<h1>{_inline_html(note.get('title') or '视频笔记')}</h1>"]
-    if note.get("summary"):
-        body.append(f"<blockquote>{_inline_html(note['summary'])}</blockquote>")
-    if note.get("tags"):
-        body.append("<p>" + " ".join(f'<span class="badge">{_inline_html(t)}</span>' for t in note["tags"]) + "</p>")
+def _inline_md_html(text: str) -> str:
+    """行内 Markdown → HTML：图片/链接先抽占位，转义后回填，再处理加粗/行内代码/斜体。"""
+    stash: List[str] = []
 
-    for i, ch in enumerate(note.get("chapters") or [], start=1):
-        body.append(f"<h2>{i}. {_inline_html(ch.get('title', ''))}</h2>")
-        if ch.get("intro"):
-            body.append(f"<p><em>{_inline_html(ch['intro'])}</em></p>")
-        for j, sec in enumerate(ch.get("sections") or [], start=1):
-            star = "⭐ " if sec.get("important") else ""
-            body.append(f"<h3>{star}{i}.{j} {_inline_html(sec.get('heading', ''))}</h3>")
-            for block in sec.get("blocks") or []:
-                btype = block.get("type")
-                if btype == "text":
-                    body.append(f"<p>{_inline_html(block.get('content', ''))}</p>")
-                elif btype == "formula":
-                    body.append(f"<p>$$\n{html.escape(block.get('content', ''))}\n$$</p>")
-                elif btype == "quote":
-                    body.append(f"<blockquote>{_inline_html(block.get('content', ''))}</blockquote>")
-                elif btype in ("steps", "list"):
-                    tag = "ol" if (btype == "steps" or block.get("ordered")) else "ul"
-                    items = "".join(f"<li>{_inline_html(x)}</li>" for x in block.get("items") or [])
-                    body.append(f"<{tag}>{items}</{tag}>")
-                elif btype == "code":
-                    body.append(f"<pre><code>{html.escape(block.get('content', ''))}</code></pre>")
-                elif btype == "table":
-                    headers = block.get("headers") or []
-                    head = "".join(f"<th>{_inline_html(h)}</th>" for h in headers)
-                    rows = "".join("<tr>" + "".join(f"<td>{_inline_html(c)}</td>" for c in row) + "</tr>"
-                                   for row in block.get("rows") or [])
-                    body.append(f"<table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>")
-                elif btype == "screenshot":
-                    if block.get("image_url"):
-                        body.append(f'<figure><img src="{html.escape(block["image_url"])}" alt="截图" style="max-width:100%"/>'
-                                    + (f"<figcaption>{_inline_html(block.get('content', ''))}</figcaption>" if block.get("content") else "")
-                                    + "</figure>")
-                    elif block.get("content"):
-                        body.append(f"<p><em>{_inline_html(block['content'])}</em></p>")
-        if ch.get("summary"):
-            body.append(f"<blockquote><strong>本章小结：</strong>{_inline_html(ch['summary'])}</blockquote>")
-        if ch.get("key_points"):
-            body.append("<p><strong>本章要点</strong></p><ul>"
-                        + "".join(f"<li>{_inline_html(p)}</li>" for p in ch["key_points"]) + "</ul>")
+    def _keep(html_str: str) -> str:
+        stash.append(html_str)
+        return f"\x00{len(stash) - 1}\x00"
 
-    if note.get("key_takeaways"):
-        body.append('<div class="takeaway"><h2>核心要点</h2><ul>'
-                    + "".join(f"<li>{_inline_html(p)}</li>" for p in note["key_takeaways"]) + "</ul></div>")
+    t = re.sub(
+        r"!\[([^\]]*)\]\(([^)\s]+)\)",
+        lambda m: _keep(f'<img src="{html.escape(m.group(2), quote=True)}" alt="{html.escape(m.group(1))}" style="max-width:100%"/>'),
+        text or "",
+    )
+    t = re.sub(
+        r"\[([^\]]+)\]\(([^)\s]+)\)",
+        lambda m: _keep(f'<a href="{html.escape(m.group(2), quote=True)}">{html.escape(m.group(1))}</a>'),
+        t,
+    )
+    t = html.escape(t)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+    t = re.sub(r"(?<!\*)\*([^*\n]+?)\*(?!\*)", r"<em>\1</em>", t)
+    t = re.sub(r"\x00(\d+)\x00", lambda m: stash[int(m.group(1))], t)
+    return t
 
-    if len(body) == 1 and markdown_hint:
-        body.append(f"<pre>{html.escape(markdown_hint)}</pre>")
 
-    return _page(note.get("title") or "视频笔记", "\n".join(body))
+def _table_cells(line: str) -> List[str]:
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def markdown_to_html(markdown: str, title: str = "视频笔记") -> str:
+    """Markdown 正文 → 打印友好 HTML（CommonMark 常用子集 + GFM 表格）。
+
+    公式 $...$ / $$...$$ 原样保留，交给页面里的 KaTeX auto-render 渲染。
+    """
+    lines = (markdown or "").splitlines()
+    body: List[str] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        stripped = lines[i].strip()
+
+        # 围栏代码块
+        if stripped.startswith("```"):
+            lang = stripped[3:].strip()
+            code: List[str] = []
+            i += 1
+            while i < n and not lines[i].strip().startswith("```"):
+                code.append(lines[i])
+                i += 1
+            i += 1
+            cls = f' class="language-{html.escape(lang)}"' if lang else ""
+            body.append(f"<pre><code{cls}>{html.escape(chr(10).join(code))}</code></pre>")
+            continue
+
+        if not stripped:
+            i += 1
+            continue
+
+        # 标题
+        m = re.match(r"^(#{1,6})\s+(.*)$", stripped)
+        if m:
+            level = min(len(m.group(1)), 6)
+            body.append(f"<h{level}>{_inline_md_html(m.group(2))}</h{level}>")
+            i += 1
+            continue
+
+        # 引用
+        if stripped.startswith(">"):
+            quote: List[str] = []
+            while i < n and lines[i].strip().startswith(">"):
+                quote.append(lines[i].strip().lstrip(">").strip())
+                i += 1
+            body.append("<blockquote>" + "<br/>".join(_inline_md_html(q) for q in quote if q) + "</blockquote>")
+            continue
+
+        # GFM 表格：当前行是 | ... | 且下一行是分隔行
+        if stripped.startswith("|") and i + 1 < n and re.match(r"^\|[\s:|-]+\|?$", lines[i + 1].strip()):
+            headers = _table_cells(stripped)
+            i += 2
+            rows: List[List[str]] = []
+            while i < n and lines[i].strip().startswith("|"):
+                rows.append(_table_cells(lines[i]))
+                i += 1
+            head = "".join(f"<th>{_inline_md_html(h)}</th>" for h in headers)
+            body_rows = "".join(
+                "<tr>" + "".join(f"<td>{_inline_md_html(c)}</td>" for c in row) + "</tr>" for row in rows
+            )
+            body.append(f"<table><thead><tr>{head}</tr></thead><tbody>{body_rows}</tbody></table>")
+            continue
+
+        # 分隔线
+        if re.match(r"^(-{3,}|\*{3,}|_{3,})$", stripped):
+            body.append("<hr/>")
+            i += 1
+            continue
+
+        # 列表（连续同类项合并为一个列表；缩进子项拍平）
+        if re.match(r"^[-*+]\s+", stripped) or re.match(r"^\d+[.)]\s+", stripped):
+            ordered = bool(re.match(r"^\d+[.)]\s+", stripped))
+            tag = "ol" if ordered else "ul"
+            pat = r"^\d+[.)]\s+" if ordered else r"^[-*+]\s+"
+            items: List[str] = []
+            while i < n and re.match(pat, lines[i].strip()):
+                items.append(_inline_md_html(re.sub(pat, "", lines[i].strip())))
+                i += 1
+            body.append(f"<{tag}>" + "".join(f"<li>{it}</li>" for it in items) + f"</{tag}>")
+            continue
+
+        # 段落：连续普通行合并
+        para: List[str] = []
+        while i < n:
+            s = lines[i].strip()
+            if (not s or s.startswith("#") or s.startswith(">") or s.startswith("|")
+                    or s.startswith("```") or re.match(r"^[-*+]\s+", s) or re.match(r"^\d+[.)]\s+", s)):
+                break
+            para.append(s)
+            i += 1
+        if para:
+            body.append("<p>" + "<br/>".join(_inline_md_html(p) for p in para) + "</p>")
+
+    return _page(title, "\n".join(body))

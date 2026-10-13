@@ -72,7 +72,12 @@ function TaskRow(props: {
     <div className="row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
       <div className="rowflex" style={{ cursor: 'pointer' }} onClick={props.onToggle}>
         <div className="grow">
-          <div className="title mono">{t.task_id}</div>
+          <div
+            className={t.title || t.result?.audio_meta?.title ? 'title' : 'title mono'}
+            title={t.task_id}
+          >
+            {t.title || t.result?.audio_meta?.title || t.task_id}
+          </div>
           <div className="desc">
             {t.label} · {t.message}
             {t.detail ? ` · ${t.detail}` : ''}
@@ -96,9 +101,9 @@ function TaskRow(props: {
           <StepDots step={t.step} total={t.total_steps} />
           {t.error && <p className="inline-error">失败原因：{t.error}</p>}
 
-          {t.history.length > 0 && (
+          {(t.history ?? []).length > 0 && (
             <div className="stack tight">
-              {t.history.map((h, i) => (
+              {(t.history ?? []).map((h, i) => (
                 <div key={i} className="rowflex small">
                   <Timecode value={`0:${String(Math.floor(h.elapsed / 60)).padStart(2, '0')}:${String(Math.round(h.elapsed % 60)).padStart(2, '0')}`} />
                   <strong>{h.label}</strong>

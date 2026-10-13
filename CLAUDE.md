@@ -28,7 +28,7 @@ docker-compose -f docker-compose.gpu.yml up  # GPU variant
 ## Architecture
 
 **Backend** (`backend/`) — FastAPI app, entry point `main.py`:
-- `app/routers/` — API routes: `note.py` (generation), `provider.py`, `model.py`, `config.py`, `chat.py` (RAG Q&A on generated notes), `collection.py` (合集/课程), `quiz.py` (自测题/错题本), `review_material.py` (复习资料), `export.py` (Markdown/HTML 导出), `archive.py` (学习存档导出/合并导入)
+- `app/routers/` — API routes: `note.py` (generation), `provider.py`, `model.py`, `config.py`, `chat.py` (RAG Q&A on generated notes), `collection.py` (合集/课程), `export.py` (Markdown/HTML 导出), `archive.py` (学习存档导出/合并导入)
 - `app/mcp_server.py` — MCP 服务（Streamable HTTP，挂载于 `/mcp`）：`generate_note` / `list_notes` / `get_task_status` / `get_note`，复用 `/api` 同一批服务函数
 - `app/services/` — Business logic:
   - `note.py` — `NoteGenerator` orchestrates the full pipeline (download → transcribe → LLM → notes)
@@ -38,15 +38,15 @@ docker-compose -f docker-compose.gpu.yml up  # GPU variant
   - `transcriber_config_manager.py` — persisted transcriber settings
 - `app/downloaders/` — Platform adapters (bilibili, youtube, douyin, kuaishou, local) with shared `base.py` interface
 - `app/transcriber/` — Speech-to-text engines (fast-whisper, groq, bcut, kuaishou, mlx-whisper) with factory in `transcriber_provider.py`. YouTube path prefers existing subtitles and skips audio download when available.
-- `app/gpt/` — LLM integration with factory pattern (`gpt_factory.py`), structured note pipeline (`prompt.py`, `prompt_builder.py`, `note_render.py`), and `request_chunker.py` for long transcripts
-- `app/db/` — SQLite + SQLAlchemy: DAO pattern (`provider_dao.py`, `model_dao.py`, `video_task_dao.py`), models in `models/`
+- `app/gpt/` — LLM integration with factory pattern (`gpt_factory.py`), Markdown 直出笔记管线（`prompt.py`, `prompt_builder.py`, `universal_gpt.py` 的 map→merge→finalize + checkpoint 断点续跑），and `request_chunker.py` for long transcripts
+- `app/db/` — SQLite + SQLAlchemy: DAO pattern (`provider_dao.py`, `model_dao.py`, `video_task_dao.py`, `collection_dao.py`), models in `models/`
 - `app/utils/` — `response.py` (ResponseWrapper for consistent JSON), `video_helper.py` (screenshots via FFmpeg), `path_helper.py` (统一数据目录派生), `screenshot_marker.py` / `note_helper.py` (标记协议)
 - `app/validators/video_url_validator.py` — URL → platform detection
 - `app/exceptions/` — `BizException` + handlers wired in `main.py` via `register_exception_handlers`
 - `backend/events/` — Blinker signal system for post-processing (e.g., temp file cleanup after transcription); registered in `lifespan` startup
 - `backend/ffmpeg_helper.py` — `ensure_ffmpeg_or_raise` is called at startup; respects `FFMPEG_BIN_PATH`
 
-**Core Workflow**: client submits URL via API → task queued → download video → extract audio (FFmpeg) → transcribe (Whisper/Groq/etc) → generate structured note (note_json → 派生 Markdown) → client polls `/api/task_status/{task_id}` for completion.
+**Core Workflow**: client submits URL via API → task queued → download video → extract audio (FFmpeg) → transcribe (Whisper/Groq/etc) → LLM 直出 Markdown 笔记（`*Content-[mm:ss]` / `*Screenshot-[mm:ss]` 标记协议）→ client polls `/api/task_status/{task_id}` for completion.
 
 ## Key Configuration
 

@@ -1,7 +1,7 @@
-"""笔记产物读取（{task_id}.json 的 note 字段 / {task_id}.note.json）。
+"""笔记产物读取（Markdown 正文是唯一源真值）。
 
-structured-v1 起 note_json 是源真值，派生 Markdown 与它一起落盘；
-旧笔记只有 Markdown，此时返回 None，由调用方决定兜底策略。
+markdown-v2 起笔记就是纯 Markdown（含 `*Content-[mm:ss]` / `*Screenshot-[mm:ss]`
+标记协议的后处理结果）；structured-v1 时代的 note_json 不再被读取。
 """
 import json
 from pathlib import Path
@@ -15,29 +15,6 @@ logger = get_logger(__name__)
 
 def _note_dir() -> Path:
     return Path(get_note_results_dir())
-
-
-def load_note(task_id: str) -> Optional[dict]:
-    """读取结构化笔记 note_json；旧笔记返回 None。"""
-    note_file = _note_dir() / f"{task_id}.note.json"
-    if note_file.exists():
-        try:
-            data = json.loads(note_file.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and data.get("chapters"):
-                return data
-        except Exception as exc:
-            logger.warning(f"读取 {note_file} 失败：{exc}")
-
-    result_file = _note_dir() / f"{task_id}.json"
-    if result_file.exists():
-        try:
-            data = json.loads(result_file.read_text(encoding="utf-8"))
-            note = data.get("note")
-            if isinstance(note, dict) and note.get("chapters"):
-                return note
-        except Exception as exc:
-            logger.warning(f"读取 {result_file} 失败：{exc}")
-    return None
 
 
 def load_note_markdown(task_id: str) -> Optional[str]:

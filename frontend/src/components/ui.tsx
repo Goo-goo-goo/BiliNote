@@ -24,6 +24,39 @@ export function useToast() {
   return useContext(ToastCtx)
 }
 
+// ---------- 渲染兜底 ----------
+/** 路由级错误边界：子树渲染抛异常时就地显示错误卡片，不再让整页变白。 */
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="panel">
+          <header>
+            <h2>这个页面出错了</h2>
+          </header>
+          <div className="body stack">
+            <p className="small soft">局部渲染异常，其它页面不受影响。可以重试，或重新加载整个应用。</p>
+            <code className="mono small inline-error">{String(this.state.error?.message || this.state.error)}</code>
+            <div className="rowflex">
+              <Button onClick={() => this.setState({ error: null })}>重试</Button>
+              <Button variant="quiet" onClick={() => window.location.reload()}>
+                重新加载
+              </Button>
+            </div>
+          </div>
+        </section>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // ---------- 按钮 ----------
 export function Button(props: {
   children: React.ReactNode

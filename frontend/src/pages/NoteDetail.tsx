@@ -1,28 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, downloadExport, NoteResultFile } from '../lib/api'
-import { cueTime, hmsToSeconds } from '../lib/format'
 import { Band, Button, Empty, useToast } from '../components/ui'
-import NoteRenderer, { chapterId } from '../features/NoteRenderer'
+import MarkdownView, { extractHeadings } from '../features/MarkdownView'
 import TimeRail from '../features/TimeRail'
-
-function timeLinkBuilder(meta?: NoteResultFile['audio_meta']): (hms: string) => string | null {
-  return (hms: string) => {
-    const seconds = hmsToSeconds(hms)
-    if (seconds == null || !meta) return null
-    const id = meta.video_id
-    if (meta.platform === 'bilibili') {
-      return `https://www.bilibili.com/video/${id.replace('_p', '?p=')}&t=${seconds}`
-    }
-    if (meta.platform === 'youtube') {
-      return `https://www.youtube.com/watch?v=${id}&t=${seconds}s`
-    }
-    if (meta.platform === 'douyin') {
-      return `https://www.douyin.com/video/${id}`
-    }
-    return null
-  }
-}
 
 export default function NoteDetail() {
   const { taskId } = useParams<{ taskId: string }>()
@@ -71,11 +52,8 @@ export default function NoteDetail() {
     )
   }
 
-  const railItems = (result.note?.chapters || []).map((ch, ci) => ({
-    id: chapterId(ci),
-    time: cueTime(ch.time_stamp),
-    label: ch.title,
-  }))
+  const markdown = result.markdown || ''
+  const railItems = extractHeadings(markdown).map((h) => ({ id: h.id, label: h.label }))
 
   return (
     <div className="page">
@@ -92,19 +70,14 @@ export default function NoteDetail() {
           </div>
         }
       >
-        <div className="note-layout">
-          {railItems.length > 0 && <TimeRail items={railItems} />}
-          {result.note ? (
-            <NoteRenderer note={result.note} imageBase="" timeLink={timeLinkBuilder(result.audio_meta)} />
-          ) : (
-            <article className="article">
-              <p className="soft">这篇是旧版 Markdown 笔记，只提供原文：</p>
-              <pre>
-                <code>{result.markdown}</code>
-              </pre>
-            </article>
-          )}
-        </div>
+        {markdown ? (
+          <div className="note-layout">
+            {railItems.length > 0 && <TimeRail items={railItems} />}
+            <MarkdownView markdown={markdown} />
+          </div>
+        ) : (
+          <Empty headline="这篇笔记没有内容" hint="重新生成一次试试。" />
+        )}
       </Band>
     </div>
   )

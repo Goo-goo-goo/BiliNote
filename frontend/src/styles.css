@@ -729,6 +729,80 @@ select.input {
 .stack { display: flex; flex-direction: column; gap: var(--s4); }
 .stack.tight { gap: var(--s2); }
 
+/* ---------- 笔记库按日期分组 ---------- */
+
+.day-groups { display: flex; flex-direction: column; }
+.day-group { border-bottom: 1px solid var(--line); }
+.day-group:last-child { border-bottom: none; }
+.day-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4) var(--s1);
+  font-size: var(--fs-sm);
+}
+.day-label strong { font-size: var(--fs-md); }
+
+/* ---------- 自动获取下拉 ---------- */
+
+.pop-overlay { position: fixed; inset: 0; z-index: 30; }
+.pop-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 260px;
+  max-height: 248px;
+  overflow: auto;
+  z-index: 31;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.pop-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  border-radius: calc(var(--radius) - 4px);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.pop-item:hover { background: var(--primary-soft); }
+.pop-item.soft { cursor: default; font-family: var(--font-ui); }
+.pop-item.soft:hover { background: none; }
+
+/* ---------- B 站扫码登录 ---------- */
+
+.qr-stage { display: flex; justify-content: center; padding: var(--s2) 0 var(--s1); }
+.qr-frame {
+  width: 216px;
+  height: 216px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+}
+.qr-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: calc(var(--radius) - 4px);
+}
+.qr-hint { text-align: center; line-height: 1.6; }
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 1080px) {

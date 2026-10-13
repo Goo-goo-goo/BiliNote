@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { api, downloadExport, Provider } from '../lib/api'
-import { Button, Check, Empty, Field, Panel, Select, TextInput, useToast } from '../components/ui'
+import { useEffect, useRef, useState } from 'react'
+import { api, BiliQrcode, downloadExport, Provider } from '../lib/api'
+import { Button, Check, Empty, Field, Modal, Panel, Pill, Select, TextInput, useToast } from '../components/ui'
 import { useApp } from '../state/store'
 
 export default function Settings() {
@@ -43,19 +43,25 @@ function ProviderPanel() {
   const [type, setType] = useState('openai')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
-  const [models, setModels] = useState<Record<string, string[]>>({})
   const [newModel, setNewModel] = useState<Record<string, string>>({})
+  const [editing, setEditing] = useState<Provider | null>(null)
+  const [menu, setMenu] = useState<{ providerId: string; loading: boolean; models: string[]; error: string } | null>(null)
 
   const refresh = () => {
     api.listProviders().then(setProviders).catch(() => setProviders([]))
   }
   useEffect(refresh, [])
 
-  const loadModels = (providerId: string) => {
+  /** 「自动获取」：拉取该供应商的可选模型清单，展开下拉供点选 */
+  const fetchModels = (p: Provider) => {
+    const id = String(p.id)
+    setMenu({ providerId: id, loading: true, models: [], error: '' })
     api
-      .modelListByProvider(providerId)
-      .then((list) => setModels((m) => ({ ...m, [providerId]: list.map((x) => x.id) })))
-      .catch(() => {})
+      .modelListByProvider(id)
+      .then((r) => setMenu({ providerId: id, loading: false, models: r.models.map((x) => x.id), error: r.error || '' }))
+      .catch((e) =>
+        setMenu({ providerId: id, loading: false, models: [], error: e instanceof Error ? e.message : '获取模型失败' })
+      )
   }
 
   const add = async () => {
@@ -123,11 +129,11 @@ function ProviderPanel() {
                     </div>
                     <div className="desc mono">{p.base_url}</div>
                   </div>
-                  <Button variant="quiet" size="sm" onClick={() => loadModels(String(p.id))}>
-                    查看模型
-                  </Button>
                   <Button variant="quiet" size="sm" onClick={() => test(p)}>
                     测试连接
+                  </Button>
+                  <Button variant="quiet" size="sm" onClick={() => setEditing(p)}>
+                    编辑
                   </Button>
                 </div>
                 <div className="rowflex">
@@ -136,35 +142,136 @@ function ProviderPanel() {
                     onChange={(v) => setNewModel((m) => ({ ...m, [p.id]: v }))}
                     placeholder="手动登记模型名"
                   />
+                  <div style={{ position: 'relative' }}>
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      onClick={() => (menu?.providerId === String(p.id) ? setMenu(null) : fetchModels(p))}
+                    >
+                      {menu?.providerId === String(p.id) && menu.loading ? '获取中…' : '自动获取 ▾'}
+                    </Button>
+                    {menu?.providerId === String(p.id) && (
+                      <>
+                        <div className="pop-overlay" onClick={() => setMenu(null)} />
+                        <div className="pop-menu">
+                          {menu.loading ? (
+                            <div className="pop-item soft">正在拉取模型列表…</div>
+                          ) : menu.models.length ? (
+                            menu.models.map((m) => (
+                              <button
+                                key={m}
+                                className="pop-item"
+                                onClick={() => {
+                                  setNewModel((s) => ({ ...s, [p.id]: m }))
+                                  setMenu(null)
+                                }}
+                              >
+                                {m}
+                              </button>
+                            ))
+                          ) : (
+                            <div className="pop-item soft">{menu.error || '没有可选模型'}</div>
+                          )}
+                          {!menu.loading && menu.models.length > 0 && menu.error && (
+                            <div className="pop-item soft">{menu.error}</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <Button
                     size="sm"
                     onClick={async () => {
                       const model = (newModel[p.id] || '').trim()
                       if (!model) return
-                      await api.addModel({ provider_id: String(p.id), model_name: model })
-                      toast('模型已登记')
-                      setNewModel((m) => ({ ...m, [p.id]: '' }))
-                      loadModels(String(p.id))
+                      try {
+                        await api.addModel({ provider_id: String(p.id), model_name: model })
+                        toast('模型已登记')
+                        setNewModel((m) => ({ ...m, [p.id]: '' }))
+                      } catch (e) {
+                        toast(e instanceof Error ? e.message : '模型登记失败')
+                      }
                     }}
                   >
                     登记
                   </Button>
                 </div>
-                {models[p.id] && (
-                  <div className="rowflex" style={{ flexWrap: 'wrap' }}>
-                    {models[p.id].map((m) => (
-                      <span className="tag" key={m}>
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
           </div>
         )}
       </div>
+      {editing && (
+        <ProviderEditModal
+          provider={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            refresh()
+          }}
+        />
+      )}
     </Panel>
+  )
+}
+
+/** 编辑供应商：改 base_url / API Key；API Key 留空表示不修改。 */
+function ProviderEditModal({
+  provider,
+  onClose,
+  onSaved,
+}: {
+  provider: Provider
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const toast = useToast()
+  const [baseUrl, setBaseUrl] = useState(provider.base_url || '')
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!baseUrl.trim()) {
+      toast('接口地址不能为空')
+      return
+    }
+    setSaving(true)
+    try {
+      const payload: { id: string; base_url: string; api_key?: string } = {
+        id: String(provider.id),
+        base_url: baseUrl.trim(),
+      }
+      // 留空不回传，避免空串覆盖原 Key（后端对掩码值也有防护）
+      if (apiKey.trim()) payload.api_key = apiKey.trim()
+      await api.updateProvider(payload)
+      toast('供应商已更新')
+      onSaved()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title={`编辑供应商 · ${provider.name}`} onClose={onClose}>
+      <div className="stack">
+        <Field label="接口地址 base_url">
+          <TextInput value={baseUrl} onChange={setBaseUrl} mono placeholder="https://api.example.com/v1" />
+        </Field>
+        <Field label="API Key" hint="留空则不修改当前 Key；保存后只显示掩码">
+          <TextInput value={apiKey} onChange={setApiKey} mono type="password" placeholder="sk-…" />
+        </Field>
+        <div className="rowflex">
+          <Button onClick={save} disabled={saving}>
+            {saving ? '保存中…' : '保存'}
+          </Button>
+          <Button variant="quiet" onClick={onClose}>
+            取消
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -332,6 +439,7 @@ function CookiePanel() {
   const [cookie, setCookie] = useState('')
   const [grabbing, setGrabbing] = useState(false)
   const [showManual, setShowManual] = useState(false)
+  const [qrOpen, setQrOpen] = useState(false)
 
   const bridge = (window as unknown as {
     bilinote?: {
@@ -379,19 +487,22 @@ function CookiePanel() {
   }
 
   return (
+    <>
     <Panel title="下载 Cookie">
       <div className="stack">
         {platform === 'bilibili' ? (
           <>
             <div className="callout">
               <div style={{ flex: 1 }}>
-                <div className="title">去 B 站登录，回来点一下就自动抓好</div>
+                <div className="title">两种方式拿到 B 站登录态，抓到即自动保存</div>
                 <div className="sub">
-                  打开登录窗口 → 完成登录（扫码 / 验证码都行）→ 回来点「抓取 Cookie 并保存」，含 SESSDATA 的 Cookie 串自动填好。
+                  扫码登录：点「扫码登录」用哔哩哔哩 App 扫码，确认后 Cookie 自动保存，Web / 桌面通用。
+                  桌面应用里也可打开登录窗口完成登录（扫码 / 验证码都行）→ 回来点「抓取 Cookie 并保存」。
                 </div>
               </div>
             </div>
             <div className="rowflex">
+              <Button onClick={() => setQrOpen(true)}>扫码登录</Button>
               <Button
                 variant="cue"
                 onClick={async () => {
@@ -451,6 +562,128 @@ function CookiePanel() {
         )}
       </div>
     </Panel>
+    {qrOpen && (
+      <BiliQrLoginModal
+        onClose={() => setQrOpen(false)}
+        onSuccess={(c) => {
+          setQrOpen(false)
+          setPlatform('bilibili')
+          if (c) setCookie(c)
+          else load('bilibili')
+          toast('扫码登录成功，Cookie 已保存')
+        }}
+      />
+    )}
+    </>
+  )
+}
+
+/** B 站扫码登录弹窗：申请二维码 → 每 2s 轮询状态 → success 时后端已自动保存 Cookie。 */
+function BiliQrLoginModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (cookie: string | null) => void
+}) {
+  const [qr, setQr] = useState<BiliQrcode | null>(null)
+  const [status, setStatus] = useState<'pending' | 'scanned' | 'expired' | 'success'>('pending')
+  const [error, setError] = useState('')
+  const [round, setRound] = useState(0)
+  const doneRef = useRef(false)
+  const successRef = useRef(onSuccess)
+  successRef.current = onSuccess
+
+  useEffect(() => {
+    let cancelled = false
+    let timer = 0
+    let failures = 0
+    doneRef.current = false
+    setQr(null)
+    setStatus('pending')
+    setError('')
+
+    api
+      .biliQrcode()
+      .then((res) => {
+        if (cancelled) return
+        setQr(res)
+        timer = window.setInterval(async () => {
+          try {
+            const s = await api.biliQrcodeStatus(res.qrcode_key)
+            if (cancelled || doneRef.current) return
+            failures = 0
+            if (s.status === 'success') {
+              doneRef.current = true
+              window.clearInterval(timer)
+              setStatus('success')
+              successRef.current(s.cookie)
+            } else if (s.status === 'expired') {
+              window.clearInterval(timer)
+              setStatus('expired')
+            } else {
+              setStatus(s.status)
+            }
+          } catch {
+            if (cancelled || doneRef.current) return
+            failures += 1
+            if (failures >= 3) {
+              window.clearInterval(timer)
+              setError('扫码状态查询失败，请确认后端服务可用后重试')
+            }
+          }
+        }, 2000)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : '二维码生成失败')
+      })
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [round])
+
+  const done = status === 'success'
+  const stuck = status === 'expired' || !!error
+  const hint = error
+    ? error
+    : done
+      ? '登录成功，Cookie 已保存'
+      : status === 'scanned'
+        ? '已扫码，请在手机上确认登录'
+        : qr
+          ? '请用哔哩哔哩 App「扫一扫」登录，成功后 Cookie 自动保存'
+          : '二维码生成中…'
+
+  return (
+    <Modal title="B站扫码登录" onClose={onClose}>
+      <div className="stack">
+        <div className="qr-stage">
+          <div className="qr-frame">
+            {qr && !stuck ? (
+              <img src={`data:image/png;base64,${qr.qr_png_base64}`} alt="B站登录二维码" />
+            ) : (
+              <span>{status === 'expired' ? '二维码已过期' : error ? '二维码加载失败' : '生成中…'}</span>
+            )}
+          </div>
+        </div>
+        <div className="stack tight" style={{ alignItems: 'center' }}>
+          <Pill kind={done ? 'ok' : stuck ? 'fail' : 'run'}>
+            {done ? '已登录' : status === 'expired' ? '已过期' : status === 'scanned' ? '已扫码，待确认' : error ? '出错' : '等待扫码'}
+          </Pill>
+          <div className="small soft qr-hint">{hint}</div>
+        </div>
+        {stuck && (
+          <div className="rowflex" style={{ justifyContent: 'center' }}>
+            <Button variant="cue" onClick={() => setRound((r) => r + 1)}>
+              刷新二维码
+            </Button>
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 

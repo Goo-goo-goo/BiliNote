@@ -31,6 +31,20 @@ def prepend_source_link(markdown: str | None, source_url: str) -> str | None:
     return header
 
 
+_CONTENT_MARKER_RE = re.compile(r"[ \t]*\*?Content-(?:\[[0-9:]+\]|[0-9]{1,3}:[0-9]{2}(?::[0-9]{2})?)\*?")
+_SCREENSHOT_MARKER_RE = re.compile(r"[ \t]*\*?Screenshot-(?:\[[0-9:]+\]|[0-9]{1,3}:[0-9]{2}(?::[0-9]{2})?)\*?")
+
+
+def strip_unused_markers(markdown: str, *, link: bool, screenshot: bool) -> str:
+    """未开启对应能力时清掉模型写下的标记，避免 *Content- / *Screenshot- 以原文泄漏进笔记。"""
+    out = markdown or ""
+    if not link:
+        out = _CONTENT_MARKER_RE.sub("", out)
+    if not screenshot:
+        out = _SCREENSHOT_MARKER_RE.sub("", out)
+    return re.sub(r"[ \t]+$", "", out, flags=re.M)
+
+
 def replace_content_markers(markdown: str, video_id: str, platform: str = 'bilibili') -> str:
     """
     替换 *Content-04:16*、Content-04:16 或 Content-[04:16] 为超链接，跳转到对应平台视频的时间位置

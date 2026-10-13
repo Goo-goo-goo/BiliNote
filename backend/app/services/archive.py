@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from app.db.engine import SessionLocal, get_db_path
-from app.db.models.learning import Collection, CollectionItem, QuizQuestion, ReviewMaterial, WrongAnswer
+from app.db.models.learning import Collection, CollectionItem
 from app.db.models.video_tasks import VideoTask
 from app.utils.logger import get_logger
 from app.utils.path_helper import get_note_results_dir, get_static_dir
@@ -28,8 +28,8 @@ MANIFEST_NAME = "manifest.json"
 DB_NAME = "bili_note.db"
 
 # 导入白名单：学习数据；providers/models/settings 刻意排除（密钥与本机设置不随档迁移）
-IMPORT_TABLES = ("video_tasks", "collections", "collection_items",
-                 "quiz_questions", "wrong_answers", "review_materials")
+# （自测题 / 错题本 / 复习资料已下线，老存档里的这些表会被忽略）
+IMPORT_TABLES = ("video_tasks", "collections", "collection_items")
 
 _NOTE_SUFFIXES = (".json", ".md")
 
@@ -163,7 +163,6 @@ def import_archive(zip_bytes: bytes) -> Dict:
         session = SessionLocal()
         try:
             collection_id_map: Dict[int, int] = {}
-            question_id_map: Dict[int, int] = {}
 
             # 1) video_tasks：task_id 唯一
             for row in source_rows.get("video_tasks", []):
@@ -202,52 +201,6 @@ def import_archive(zip_bytes: bytes) -> Dict:
                 payload["collection_id"] = mapped
                 session.add(CollectionItem(**payload))
                 stats["collection_items"]["imported"] += 1
-
-            # 4) quiz_questions：(task_id, stem) 去重
-            for row in source_rows.get("quiz_questions", []):
-                payload = _row_payload(row)
-                if row["collection_id"] is not None:
-                    payload["collection_id"] = collection_id_map.get(row["collection_id"], row["collection_id"])
-                exists = (session.query(QuizQuestion)
-                          .filter_by(task_id=payload.get("task_id"), stem=payload.get("stem"))
-                          .first())
-                if exists:
-                    question_id_map[row["id"]] = exists.id
-                    stats["quiz_questions"]["skipped"] += 1
-                    continue
-                obj = QuizQuestion(**payload)
-                session.add(obj)
-                session.flush()
-                question_id_map[row["id"]] = obj.id
-                stats["quiz_questions"]["imported"] += 1
-
-            # 5) wrong_answers：(task_id, question) 去重，question_id 重映射
-            for row in source_rows.get("wrong_answers", []):
-                payload = _row_payload(row)
-                exists = (session.query(WrongAnswer)
-                          .filter_by(task_id=payload.get("task_id"), question=payload.get("question"))
-                          .first())
-                if exists:
-                    stats["wrong_answers"]["skipped"] += 1
-                    continue
-                if payload.get("question_id") is not None:
-                    payload["question_id"] = question_id_map.get(payload["question_id"])
-                session.add(WrongAnswer(**payload))
-                stats["wrong_answers"]["imported"] += 1
-
-            # 6) review_materials：(合集, title) 去重
-            for row in source_rows.get("review_materials", []):
-                payload = _row_payload(row)
-                mapped = collection_id_map.get(row["collection_id"], row["collection_id"])
-                exists = (session.query(ReviewMaterial)
-                          .filter_by(collection_id=mapped, title=payload.get("title"))
-                          .first())
-                if exists:
-                    stats["review_materials"]["skipped"] += 1
-                    continue
-                payload["collection_id"] = mapped
-                session.add(ReviewMaterial(**payload))
-                stats["review_materials"]["imported"] += 1
 
             session.commit()
         except Exception:

@@ -105,8 +105,8 @@ class UniversalGPT(GPT):
 
     def _build_source_signature(self, source: GPTSource) -> str:
         payload = {
-            # 提示词管线版本：structured-v1 切换后让旧 Markdown 管线的 checkpoint 自动失效
-            "pipeline": "structured-v1",
+            # 提示词管线版本：markdown-v2 切换后让旧 structured-v1（JSON）的 checkpoint 自动失效
+            "pipeline": "markdown-v2",
             "model": self.model,
             "temperature": self.temperature,
             "max_request_bytes": self.max_request_bytes,
@@ -274,51 +274,27 @@ class UniversalGPT(GPT):
 
     # ---------------------------------------------------------- structured-v1
 
-    def _chat_json(self, messages: list, purpose: str = "笔记"):
-        """调用模型并稳健解析 JSON；解析失败把错误回喂重试（共 3 次机会）。
+    def _chat_text(self, messages: list, purpose: str = "笔记") -> str:
+        """调用模型直接拿 Markdown 正文；空输出回喂重试（共 3 次机会）。
 
-        HTTP / 网络层错误不在这里重试（由 _chat_completion_create 的重试预算负责），
-        也不会被误包装成「JSON 解析失败」。
+        markdown-v2 起笔记产物就是纯文本 Markdown，不做任何 JSON 解析与结构校验；
+        这里唯一的兜底是「输出为空」，避免把空串当笔记落盘。
+
+        HTTP / 网络层错误不在这里重试（由 _chat_completion_create 的重试预算负责）。
         """
-        from app.gpt.note_render import extract_json
-
         history = list(messages)
-        last_err = ""
         for attempt in range(3):
             response = self._chat_completion_create(history)
             text = (response.choices[0].message.content or "").strip()
-            try:
-                return extract_json(text)
-            except ValueError as exc:
-                last_err = str(exc)
-                print(f"[universal_gpt] {purpose} JSON 解析失败（第 {attempt + 1} 次）：{last_err}")
-                if attempt < 2:
-                    history = history + [{
-                        "role": "user",
-                        "content": (
-                            "你上一次的输出不是合法 JSON。请严格只输出一个 JSON 对象，"
-                            "不要包含任何解释、注释或 Markdown 代码块。错误信息：" + last_err
-                        ),
-                    }]
-        raise ValueError(f"{purpose} JSON 解析失败：{last_err}")
-
-    def chat_json(self, messages: list, purpose: str = "内容"):
-        """通用 JSON 对话入口（自测题、复习资料等非笔记场景复用同一套健壮解析）。"""
-        return self._chat_json(messages, purpose=purpose)
-
-    def _normalize_sections_text(self, raw) -> str:
-        """map / merge 产物 → 规范 `{"sections": [...]}` JSON 文本。
-
-        checkpoint 只存字符串列表，故统一序列化为文本。
-        """
-        from app.gpt.note_render import extract_sections, normalize_section
-
-        sections = []
-        for item in extract_sections(raw):
-            section = normalize_section(item)
-            if section:
-                sections.append(section)
-        return json.dumps({"sections": sections}, ensure_ascii=False)
+            if text:
+                return text
+            print(f"[universal_gpt] {purpose} 输出为空（第 {attempt + 1} 次）")
+            if attempt < 2:
+                history = history + [{
+                    "role": "user",
+                    "content": "你上一次没有输出任何内容。请直接输出 Markdown 正文，不要解释、不要代码围栏包裹。",
+                }]
+        raise ValueError(f"{purpose}生成失败：模型连续 3 次返回空内容")
 
     def _finalize_messages(self, sections_text: str, source: GPTSource) -> list:
         header = (
@@ -328,26 +304,23 @@ class UniversalGPT(GPT):
         # finalize 阶段没有图片，用 string content 兼容非多模态模型（issue #282）
         return [{"role": "user", "content": FINALIZE_PROMPT + header + sections_text}]
 
-    def _finalize_note(self, sections_text: str, source: GPTSource,
-                       checkpoint_key: str | None = None,
-                       source_signature: str | None = None) -> dict:
-        """最后一步：合并后的小节 → 整篇笔记 JSON（归一化后返回）。"""
-        from app.gpt.note_render import normalize_note
-
+    def _finalize_markdown(self, sections_text: str, source: GPTSource,
+                           checkpoint_key: str | None = None,
+                           source_signature: str | None = None) -> str:
+        """最后一步：合并后的小节 → 整篇 Markdown 笔记正文。"""
         if checkpoint_key and source_signature:
             # 合并已完成：断点只留合并结果，续跑时直接补本步
             self._save_checkpoint(checkpoint_key, source_signature, [sections_text], "finalize")
-        data = self._chat_json(self._finalize_messages(sections_text, source), purpose="整篇笔记")
-        note = normalize_note(data)
+        markdown = self._chat_text(self._finalize_messages(sections_text, source), purpose="整篇笔记")
         if checkpoint_key:
             self._clear_checkpoint(checkpoint_key)
-        return note
+        return markdown
 
-    def summarize_note(self, source: GPTSource, progress_cb=None) -> dict:
-        """map（分段出小节）→ merge（合并去重）→ finalize（整篇笔记）。
+    def summarize_markdown(self, source: GPTSource, progress_cb=None) -> str:
+        """map（分段出 Markdown 小节）→ merge（合并去重）→ finalize（整篇笔记）。
 
         全程 checkpoint 断点续跑：map / merge / finalize 三个阶段各自落盘，
-        中途失败重试不会重复消耗已完成阶段的调用。返回归一化 note_json。
+        中途失败重试不会重复消耗已完成阶段的调用。返回整篇 Markdown 正文。
         progress_cb(detail: str, fraction: float) 可选，回报生成进度（0~1）。
         """
         self.screenshot = source.screenshot
@@ -400,14 +373,14 @@ class UniversalGPT(GPT):
         # finalize 断点：合并已完成，直接补最后一步
         if phase == "finalize" and partials:
             report("整篇汇总（断点续跑）", 0.9)
-            return self._finalize_note(partials[0], source, checkpoint_key, source_signature)
+            return self._finalize_markdown(partials[0], source, checkpoint_key, source_signature)
 
         # merge 断点：从合并现场继续
         if phase == "merge" and partials:
             report("合并去重（断点续跑）", 0.7)
             merged_text = self._merge_partials(partials, checkpoint_key, source_signature)
             report("整篇汇总", 0.9)
-            return self._finalize_note(merged_text, source, checkpoint_key, source_signature)
+            return self._finalize_markdown(merged_text, source, checkpoint_key, source_signature)
 
         if len(partials) > len(chunks):
             partials = []
@@ -424,13 +397,13 @@ class UniversalGPT(GPT):
                 extras=source.extras
             )
             try:
-                data = self._chat_json(messages, purpose="分段小节")
+                text = self._chat_text(messages, purpose="分段小节")
             except Exception:
                 if checkpoint_key and source_signature:
                     self._save_checkpoint(checkpoint_key, source_signature, partials, "map")
                 raise
 
-            partials.append(self._normalize_sections_text(data))
+            partials.append(text)
             report(f"分段总结 {len(partials)}/{total_chunks}", 0.7 * len(partials) / total_chunks)
             if checkpoint_key and source_signature:
                 self._save_checkpoint(checkpoint_key, source_signature, partials, "map")
@@ -438,22 +411,8 @@ class UniversalGPT(GPT):
         report("合并去重", 0.7)
         merged_text = self._merge_partials(partials, checkpoint_key, source_signature)
         report("整篇汇总", 0.9)
-        return self._finalize_note(merged_text, source, checkpoint_key, source_signature)
+        return self._finalize_markdown(merged_text, source, checkpoint_key, source_signature)
 
     def summarize(self, source: GPTSource) -> str:
-        """兼容入口：返回派生 Markdown。
-
-        structured-v1 起 note_json 是源真值，Markdown 由 note_render 派生；
-        标记协议（*Content-[mm:ss] / *Screenshot-[mm:ss]）不变，下游后处理照旧。
-        """
-        from app.gpt.note_render import note_to_markdown
-
-        note = self.summarize_note(source)
-        formats = source._format or []
-        return note_to_markdown(
-            note,
-            link='link' in formats,
-            screenshot='screenshot' in formats,
-            toc='toc' in formats,
-            summary='summary' in formats,
-        )
+        """兼容入口：返回 Markdown 笔记正文（markdown-v2 起与 summarize_markdown 等价）。"""
+        return self.summarize_markdown(source)

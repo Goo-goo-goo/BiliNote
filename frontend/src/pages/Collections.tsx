@@ -102,7 +102,7 @@ export default function Collections() {
         {collections.length === 0 ? (
           <Empty
             headline="还没有合集"
-            hint="合集把多篇笔记聚成一门课程，复习资料按合集生成。"
+            hint="合集把多篇笔记聚成一门课程或专辑。"
             action={
               <Button size="sm" onClick={() => setCreating(true)}>
                 新建合集

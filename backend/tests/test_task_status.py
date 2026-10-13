@@ -49,6 +49,21 @@ class TestTaskStatus(unittest.TestCase):
         self.assertAlmostEqual(doc["progress"], 0.85, places=2)
         self.assertEqual(len(doc["history"]), 1)  # 子步骤不刷历史
 
+    def test_set_title_appears_in_doc_and_list(self):
+        task_status.update_status("t-title", TaskStatus.DOWNLOADING, message="下载媒体与元信息")
+        task_status.set_title("t-title", "  视频标题  ")
+
+        doc = task_status.read_status("t-title")
+        self.assertEqual(doc["title"], "视频标题")
+        self.assertEqual(len(doc["history"]), 1)  # 补标题不刷历史
+
+        listed = {row["task_id"]: row for row in task_status.list_statuses()}
+        self.assertEqual(listed["t-title"]["title"], "视频标题")
+
+        # 空标题不覆盖已有值
+        task_status.set_title("t-title", "   ")
+        self.assertEqual(task_status.read_status("t-title")["title"], "视频标题")
+
     def test_fail_records_error(self):
         task_status.update_status("t-fail", TaskStatus.TRANSCRIBING, message="音频转写中")
         task_status.update_status("t-fail", TaskStatus.FAILED, message="转写失败：磁盘满", error="转写失败：磁盘满")
