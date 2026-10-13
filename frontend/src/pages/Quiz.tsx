@@ -75,7 +75,7 @@ export default function Quiz() {
 
   return (
     <div className="page">
-      <Panel title="自测练习">
+      <Panel>
         <div className="stack">
           <div className="form-grid">
             <Field label="选择笔记">
@@ -114,9 +114,7 @@ export default function Quiz() {
       </Panel>
 
       {questions.length === 0 ? (
-        <Panel flush>
-          <Empty headline="还没有题目" hint="选一篇笔记点「生成自测题」，基础/中档/拔高各出几道。" />
-        </Panel>
+        <Empty headline="还没有题目" hint="选一篇笔记点「生成自测题」，基础/中档/拔高各出几道。" />
       ) : (
         questions.map((q) => <QuizCard key={q.id} question={q} model={{ modelName, providerId }} onVariant={(nq) => setQuestions((prev) => [...prev, nq])} />)
       )}

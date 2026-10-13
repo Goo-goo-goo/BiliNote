@@ -8,26 +8,38 @@ import Quiz from './pages/Quiz'
 import WrongAnswers from './pages/WrongAnswers'
 import Review from './pages/Review'
 import Settings from './pages/Settings'
+import {
+  BrandMark,
+  IconCheck,
+  IconClock,
+  IconFlag,
+  IconFolder,
+  IconGear,
+  IconHome,
+  IconNote,
+  IconReview,
+} from './components/icons'
 
 const NAV = [
-  { to: '/', glyph: '▣', label: '工作台', end: true },
-  { to: '/tasks', glyph: '⏱', label: '任务' },
-  { to: '/notes', glyph: '✎', label: '笔记' },
-  { to: '/collections', glyph: '▤', label: '合集' },
-  { to: '/quiz', glyph: '✓', label: '自测' },
-  { to: '/wrong', glyph: '⚑', label: '错题' },
-  { to: '/review', glyph: '❏', label: '复习' },
-  { to: '/settings', glyph: '⚙', label: '设置' },
+  { to: '/', label: '工作台', end: true, icon: IconHome },
+  { to: '/tasks', label: '任务', icon: IconClock },
+  { to: '/notes', label: '笔记', icon: IconNote },
+  { to: '/collections', label: '合集', icon: IconFolder },
+  { to: '/quiz', label: '自测', icon: IconCheck },
+  { to: '/wrong', label: '错题', icon: IconFlag },
+  { to: '/review', label: '复习', icon: IconReview },
+  { to: '/settings', label: '设置', icon: IconGear },
 ]
 
+// 页名与导航用同一套词（工作台/任务/笔记/…），内容区标题另起物名（笔记库/错题本/…）
 const TITLES: Record<string, string> = {
   '/': '工作台',
-  '/tasks': '任务面板',
-  '/notes': '笔记库',
-  '/collections': '合集与课程',
-  '/quiz': '自测练习',
-  '/wrong': '错题本',
-  '/review': '复习资料',
+  '/tasks': '任务',
+  '/notes': '笔记',
+  '/collections': '合集',
+  '/quiz': '自测',
+  '/wrong': '错题',
+  '/review': '复习',
   '/settings': '设置',
 }
 
@@ -40,24 +52,31 @@ export default function App() {
   return (
     <div className="app">
       <nav className="rail">
-        <div className="rail-mark">BN·8483</div>
-        {NAV.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => (isActive ? 'rail-item active' : 'rail-item')}
-          >
-            <span className="glyph">{item.glyph}</span>
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+        <div className="brand">
+          <BrandMark />
+          <span className="brand-name">BiliNote</span>
+        </div>
+        <div className="rail-nav">
+          {NAV.map((item) => {
+            const Icon = item.icon
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => (isActive ? 'rail-item active' : 'rail-item')}
+              >
+                <Icon size={18} />
+                <span className="rail-label">{item.label}</span>
+              </NavLink>
+            )
+          })}
+        </div>
       </nav>
 
       <main className="main">
         <div className="topbar">
           <h1>{title}</h1>
-          <span className="meta">BiliNote · 视频变结构化笔记</span>
         </div>
 
         <Routes>

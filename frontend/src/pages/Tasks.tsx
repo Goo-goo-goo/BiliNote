@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, TaskStatusDoc } from '../lib/api'
 import { fmtDuration, fmtPercent, fmtTime } from '../lib/format'
-import { Button, Empty, Panel, Pill, ProgressRail, StepDots, Timecode } from '../components/ui'
+import { Band, Button, Empty, Pill, ProgressRail, StepDots, Timecode } from '../components/ui'
 
 export default function Tasks() {
   const navigate = useNavigate()
@@ -28,11 +28,19 @@ export default function Tasks() {
 
   return (
     <div className="page">
-      <Panel title="全部任务" flush>
+      <Band title="全部任务" flush>
         {failed ? (
-          <Empty headline="连不上后端" hint="确认后端已启动（默认 http://localhost:8483），或到「设置」里改服务地址。" />
+          <Empty
+            headline="连不上后端"
+            hint="确认后端已启动（默认 http://localhost:8483），或到「设置」里改服务地址。"
+            action={<a className="btn" href="#/settings">打开设置</a>}
+          />
         ) : tasks.length === 0 ? (
-          <Empty headline="还没有任务" hint="到工作台贴一个视频链接开始。" />
+          <Empty
+            headline="还没有任务"
+            hint="到工作台贴一个视频链接开始。"
+            action={<a className="btn" href="#/">去工作台</a>}
+          />
         ) : (
           <div className="rows">
             {tasks.map((t) => (
@@ -46,7 +54,7 @@ export default function Tasks() {
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
     </div>
   )
 }

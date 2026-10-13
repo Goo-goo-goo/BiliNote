@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api, downloadExport, NoteResultFile } from '../lib/api'
-import { hmsToSeconds } from '../lib/format'
-import { Button, Empty, Panel, useToast } from '../components/ui'
-import NoteRenderer from '../features/NoteRenderer'
+import { cueTime, hmsToSeconds } from '../lib/format'
+import { Band, Button, Empty, useToast } from '../components/ui'
+import NoteRenderer, { chapterId } from '../features/NoteRenderer'
+import TimeRail from '../features/TimeRail'
 
 function timeLinkBuilder(meta?: NoteResultFile['audio_meta']): (hms: string) => string | null {
   return (hms: string) => {
@@ -53,7 +54,11 @@ export default function NoteDetail() {
   if (missing) {
     return (
       <div className="page">
-        <Empty headline="找不到这篇笔记" hint="可能任务还没完成，或任务 ID 不对。" />
+        <Empty
+          headline="找不到这篇笔记"
+          hint="可能任务还没完成，或任务 ID 不对。"
+          action={<a className="btn" href="#/notes">回到笔记库</a>}
+        />
       </div>
     )
   }
@@ -66,9 +71,15 @@ export default function NoteDetail() {
     )
   }
 
+  const railItems = (result.note?.chapters || []).map((ch, ci) => ({
+    id: chapterId(ci),
+    time: cueTime(ch.time_stamp),
+    label: ch.title,
+  }))
+
   return (
     <div className="page">
-      <Panel
+      <Band
         title={result.audio_meta?.title || taskId}
         extra={
           <div className="rowflex">
@@ -81,17 +92,20 @@ export default function NoteDetail() {
           </div>
         }
       >
-        {result.note ? (
-          <NoteRenderer note={result.note} imageBase="" timeLink={timeLinkBuilder(result.audio_meta)} />
-        ) : (
-          <article className="article">
-            <p className="soft">这篇是旧版 Markdown 笔记，只提供原文：</p>
-            <pre>
-              <code>{result.markdown}</code>
-            </pre>
-          </article>
-        )}
-      </Panel>
+        <div className="note-layout">
+          {railItems.length > 0 && <TimeRail items={railItems} />}
+          {result.note ? (
+            <NoteRenderer note={result.note} imageBase="" timeLink={timeLinkBuilder(result.audio_meta)} />
+          ) : (
+            <article className="article">
+              <p className="soft">这篇是旧版 Markdown 笔记，只提供原文：</p>
+              <pre>
+                <code>{result.markdown}</code>
+              </pre>
+            </article>
+          )}
+        </div>
+      </Band>
     </div>
   )
 }

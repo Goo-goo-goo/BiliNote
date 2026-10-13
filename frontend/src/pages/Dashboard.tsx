@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, Provider, TaskStatusDoc } from '../lib/api'
-import { fmtDuration, platformLabel } from '../lib/format'
-import { Button, Check, Empty, Field, Panel, ProgressRail, Select, TextArea, TextInput, Timecode, useToast } from '../components/ui'
+import { fmtDuration, fmtPercent, platformLabel } from '../lib/format'
+import { Band, Button, Check, Empty, Field, Panel, ProgressRail, Select, TextArea, useToast } from '../components/ui'
 import { useApp } from '../state/store'
 
 function detectPlatform(url: string): string {
@@ -141,17 +141,36 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      {/* 全站唯一高调元素：字幕条 hero */}
-      <div className="cue-strip">
-        <span className="tc">00:00:00</span>
-        <div>
-          <div className="line">把视频，变成带时间戳的结构化笔记。</div>
-          <div className="sub">下载 → 转写 → 结构化笔记 → 自测 · 错题 · 复习，一条流水线走完。</div>
+      {/* 工作台 hero：贴链接即主操作 */}
+      <div className="hero">
+        <div className="hero-title">把视频，变成带时间戳的结构化笔记。</div>
+        <div className="hero-sub">贴一个链接，从下载一路走到自测与复习。</div>
+
+        <div className="hero-form">
+          <div className="hero-field">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://www.bilibili.com/video/BV…"
+              aria-label="视频链接"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submit()
+              }}
+            />
+            <Button onClick={submit} disabled={submitting}>
+              {submitting ? '提交中…' : '生成笔记'}
+            </Button>
+          </div>
         </div>
+        <div className="hero-hint">
+          {platform ? `识别为 ${platformLabel(platform)}` : '支持 B站 / YouTube / 抖音 / 快手'}
+        </div>
+        {error && <p className="inline-error">{error}</p>}
+        <div className="hero-flow">下载 → 转写 → 结构化笔记 → 自测 · 错题 → 复习</div>
       </div>
 
       <Panel
-        title="生成笔记"
+        title="笔记选项"
         extra={
           <Button variant="quiet" size="sm" onClick={() => setShowOptions(!showOptions)}>
             {showOptions ? '收起选项' : '更多选项'}
@@ -159,25 +178,6 @@ export default function Dashboard() {
         }
       >
         <div className="stack">
-          <div className="rowflex form-actions">
-            <div style={{ flex: 1 }}>
-              <Field label="视频链接" hint={platform ? `识别为 ${platformLabel(platform)}` : '支持 B站 / YouTube / 抖音 / 快手'}>
-                <TextInput
-                  value={url}
-                  onChange={setUrl}
-                  placeholder="https://www.bilibili.com/video/BV…"
-                  mono
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') submit()
-                  }}
-                />
-              </Field>
-            </div>
-            <Button onClick={submit} disabled={submitting}>
-              {submitting ? '提交中…' : '生成笔记'}
-            </Button>
-          </div>
-
           <div className="form-grid">
             <Field label="模型供应商">
               <Select
@@ -219,12 +219,10 @@ export default function Dashboard() {
               </Field>
             </>
           )}
-
-          {error && <p className="inline-error">{error}</p>}
         </div>
       </Panel>
 
-      <Panel title="进行中的任务" flush>
+      <Band title="进行中的任务" flush>
         {running.length === 0 ? (
           <Empty headline="现在没有跑着的任务" hint="上面贴一个视频链接就能开始。" />
         ) : (
@@ -243,14 +241,14 @@ export default function Dashboard() {
                 <div style={{ width: 180 }}>
                   <ProgressRail value={t.progress} cue />
                 </div>
-                <Timecode value={`0:${String(Math.round((t.progress || 0) * 59)).padStart(2, '0')}:00`} hot />
+                <span className="small mono soft">{fmtPercent(t.progress)}</span>
               </div>
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
 
-      <Panel title="最近完成" flush>
+      <Band title="最近完成" flush>
         {recent.length === 0 ? (
           <Empty headline="还没有完成的笔记" hint="生成完成后会出现在这里。" />
         ) : (
@@ -271,7 +269,7 @@ export default function Dashboard() {
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
     </div>
   )
 }

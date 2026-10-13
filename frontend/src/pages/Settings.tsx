@@ -383,12 +383,9 @@ function CookiePanel() {
       <div className="stack">
         {platform === 'bilibili' ? (
           <>
-            <div className="cue-strip" style={{ padding: 'var(--s4) var(--s5)', gap: 'var(--s4)' }}>
-              <span className="tc">B站</span>
+            <div className="callout">
               <div style={{ flex: 1 }}>
-                <div className="line" style={{ fontSize: 'var(--fs-lg)' }}>
-                  去 B 站登录，回来点一下就自动抓好
-                </div>
+                <div className="title">去 B 站登录，回来点一下就自动抓好</div>
                 <div className="sub">
                   打开登录窗口 → 完成登录（扫码 / 验证码都行）→ 回来点「抓取 Cookie 并保存」，含 SESSDATA 的 Cookie 串自动填好。
                 </div>

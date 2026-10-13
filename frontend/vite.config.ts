@@ -8,6 +8,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // 开发时同源请求代理到本地后端（与 Docker 里 nginx 的转发行为一致）
+    proxy: {
+      '/api': 'http://localhost:8483',
+      '/static': 'http://localhost:8483',
+      '/uploads': 'http://localhost:8483',
+    },
   },
   build: {
     target: 'es2020',

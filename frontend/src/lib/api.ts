@@ -1,10 +1,18 @@
 // BiliNote 后端 API 客户端。后端统一返回 {code,msg,data}，code===0 为成功。
-// 运行时只连本地后端（默认 http://localhost:8483），无任何外部请求。
-
+// 默认走「同源」：Web 部署下由 nginx / Vite 代理转发到后端（跨机访问零配置）；
+// Electron（file://）没有源，直连本地后端。设置页「后端服务地址」可随时覆盖。
+// 运行时无任何外部请求。
 const DEFAULT_BASE = 'http://localhost:8483'
 
+function defaultBase(): string {
+  if (typeof window === 'undefined') return DEFAULT_BASE
+  const { protocol, origin } = window.location
+  if (protocol === 'file:' || !origin || origin === 'null') return DEFAULT_BASE
+  return origin
+}
+
 export function getBaseUrl(): string {
-  return localStorage.getItem('bilinote.server') || DEFAULT_BASE
+  return localStorage.getItem('bilinote.server') || defaultBase()
 }
 
 export function setBaseUrl(url: string) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, Collection, CollectionItem, TaskStatusDoc } from '../lib/api'
 import { platformLabel } from '../lib/format'
-import { Button, Empty, Field, Modal, Panel, Select, TextInput, useToast } from '../components/ui'
+import { Band, Button, Empty, Field, Modal, Select, TextInput, useToast } from '../components/ui'
 
 const STATUS_LABEL: Record<string, string> = { unlearned: '未学', learning: '学习中', completed: '已学完' }
 
@@ -90,7 +90,7 @@ export default function Collections() {
 
   return (
     <div className="page">
-      <Panel
+      <Band
         title="合集与课程"
         extra={
           <Button size="sm" onClick={() => setCreating(true)}>
@@ -176,7 +176,7 @@ export default function Collections() {
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
 
       {creating && (
         <Modal title="新建合集" onClose={() => setCreating(false)}>

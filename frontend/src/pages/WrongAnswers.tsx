@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, WrongAnswer } from '../lib/api'
 import { QTYPE_LABEL } from '../lib/format'
-import { Button, Check, Empty, Panel, Pill, Timecode, useToast } from '../components/ui'
+import { Band, Button, Check, Empty, Pill, Timecode, useToast } from '../components/ui'
 
 export default function WrongAnswers() {
   const toast = useToast()
@@ -35,7 +35,7 @@ export default function WrongAnswers() {
 
   return (
     <div className="page">
-      <Panel
+      <Band
         title="错题本"
         extra={
           <div className="rowflex">
@@ -86,7 +86,7 @@ export default function WrongAnswers() {
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
     </div>
   )
 }

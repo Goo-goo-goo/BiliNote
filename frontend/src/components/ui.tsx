@@ -80,9 +80,29 @@ export function Empty(props: { headline: string; hint?: string; action?: React.R
   return (
     <div className="empty">
       <div className="headline">{props.headline}</div>
-      {props.hint && <p className="small">{props.hint}</p>}
-      {props.action && <div style={{ marginTop: 16 }}>{props.action}</div>}
+      {props.hint && <p className="hint">{props.hint}</p>}
+      {props.action && <div className="empty-action">{props.action}</div>}
     </div>
+  )
+}
+
+// ---------- 无框内容流（三档层级里的 band） ----------
+export function Band(props: {
+  title?: string
+  extra?: React.ReactNode
+  children: React.ReactNode
+  flush?: boolean
+}) {
+  return (
+    <section className="band">
+      {(props.title || props.extra) && (
+        <header>
+          <h2>{props.title}</h2>
+          {props.extra}
+        </header>
+      )}
+      <div className={props.flush ? 'body flush' : 'body'}>{props.children}</div>
+    </section>
   )
 }
 
@@ -225,18 +245,7 @@ export function Modal(props: { title: string; onClose: () => void; children: Rea
   }, [props])
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(23,33,30,.45)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 40,
-      }}
-      onClick={props.onClose}
-    >
+    <div className="modal-backdrop" onClick={props.onClose}>
       <div
         className="panel"
         style={{ width: 'min(560px, 92vw)', maxHeight: '84vh', overflow: 'auto' }}

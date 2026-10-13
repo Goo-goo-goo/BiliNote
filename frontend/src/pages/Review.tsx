@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, Collection, downloadExport, Provider, ReviewMaterial } from '../lib/api'
-import { Button, Empty, Field, Panel, Select, useToast } from '../components/ui'
+import { Band, Button, Empty, Field, Panel, Select, useToast } from '../components/ui'
 import { useApp } from '../state/store'
 
 export default function Review() {
@@ -140,7 +140,7 @@ export default function Review() {
         </div>
       </Panel>
 
-      <Panel title="复习资料" flush>
+      <Band title="复习资料" flush>
         {materials.length === 0 ? (
           <Empty headline="还没有复习资料" hint="选一个合集生成，产出可导出 Markdown / HTML（浏览器直接打印成 PDF）。" />
         ) : (
@@ -177,7 +177,7 @@ export default function Review() {
             ))}
           </div>
         )}
-      </Panel>
+      </Band>
     </div>
   )
 }

@@ -4,29 +4,61 @@ import 'katex/dist/katex.min.css'
 import type { NoteBlock, NoteChapter, NoteJson, NoteSection } from '../lib/api'
 import { Timecode } from '../components/ui'
 
-/** 行内片段：**加粗**、`代码`、$公式$ → HTML */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** 常见损坏修复：转义层把 \n \t \r \f \v \b 当成控制字符解掉，
+ *  于是 \nabla → 换行+abla、\theta → 制表符+heta。这里做逆向还原。 */
+function repairEscapes(latex: string): string {
+  return latex
+    .replace(/\n/g, '\\n')
+    .replace(/\t/g, '\\t')
+    .replace(/\r/g, '\\r')
+    .replace(/\f/g, '\\f')
+    .replace(/\v/g, '\\v')
+    .replace(/\x08/g, '\\b')
+}
+
+function renderMathHtml(latex: string, displayMode: boolean): string {
+  const tryRender = (src: string): string | null => {
+    try {
+      return katex.renderToString(src, { throwOnError: true, displayMode })
+    } catch {
+      return null
+    }
+  }
+  // 含控制字符（换行/制表等）的公式多半是转义损坏，优先试修复版：
+  // KaTeX 对「abla f( heta_t)」这种损坏会容忍渲染，先试修复才拦得住；
+  // 合法的多行公式修复后会报错，自动落回原文渲染，不会误伤。
+  if (/[\n\t\r\f\v\x08]/.test(latex)) {
+    return tryRender(repairEscapes(latex)) ?? tryRender(latex) ?? ''
+  }
+  return tryRender(latex) ?? ''
+}
+
+/** 行内片段：**加粗**、`代码`、$公式$ / \(公式\) → HTML */
 function inlineHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  const escaped = escapeHtml(text)
 
   const parts: string[] = []
-  const pattern = /\$\$?([^$]+)\$\$?|`([^`]+)`|\*\*([^*]+)\*\*/g
+  // 注：$...$ 允许跨行——转义损坏的公式里 \n 会变成真换行
+  const pattern =
+    /\$\$([\s\S]+?)\$\$|\$([^$]+)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|`([^`]+)`|\*\*([^*]+)\*\*/g
   let last = 0
   let m: RegExpExecArray | null
   while ((m = pattern.exec(escaped))) {
     parts.push(escaped.slice(last, m.index))
-    if (m[1] != null) {
-      try {
-        parts.push(katex.renderToString(m[1], { throwOnError: false, displayMode: false }))
-      } catch {
-        parts.push(m[1])
-      }
-    } else if (m[2] != null) {
-      parts.push(`<code>${m[2]}</code>`)
-    } else if (m[3] != null) {
-      parts.push(`<strong>${m[3]}</strong>`)
+    const tex = m[1] ?? m[2] ?? m[3] ?? m[4]
+    if (tex != null) {
+      const display = m[1] != null || m[4] != null
+      const html = renderMathHtml(tex, display)
+      // 渲染不出来就按原文回显（已转义，不吞内容）
+      parts.push(html || `<code>${tex}</code>`)
+    } else if (m[5] != null) {
+      parts.push(`<code>${m[5]}</code>`)
+    } else if (m[6] != null) {
+      parts.push(`<strong>${m[6]}</strong>`)
     }
     last = m.index + m[0].length
   }
@@ -39,11 +71,7 @@ function Inline({ text }: { text: string }) {
 }
 
 function displayMath(latex: string): string {
-  try {
-    return katex.renderToString(latex, { throwOnError: false, displayMode: true })
-  } catch {
-    return latex
-  }
+  return renderMathHtml(latex, true) || `<code>${escapeHtml(latex)}</code>`
 }
 
 function BlockView({ block, imageBase }: { block: NoteBlock; imageBase: string }) {
@@ -128,6 +156,11 @@ export function sectionId(chapterIndex: number, sectionIndex: number): string {
   return `sec-${chapterIndex}-${sectionIndex}`
 }
 
+/** 章节锚点：时间轨刻度跳转的落点 */
+export function chapterId(chapterIndex: number): string {
+  return `chap-${chapterIndex}`
+}
+
 export default function NoteRenderer(props: {
   note: NoteJson
   imageBase: string
@@ -142,7 +175,6 @@ export default function NoteRenderer(props: {
 
   return (
     <article className="article">
-      <h1>{note.title}</h1>
       {note.summary && (
         <div className="lead">
           <Inline text={note.summary} />
@@ -160,7 +192,7 @@ export default function NoteRenderer(props: {
 
       {note.chapters.map((chapter: NoteChapter, ci) => (
         <section key={ci}>
-          <h2>
+          <h2 id={chapterId(ci)}>
             {ci + 1}. {chapter.title}
             {chapter.time_stamp && (
               <>
