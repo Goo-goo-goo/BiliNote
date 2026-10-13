@@ -164,7 +164,43 @@ BiliNote 是一个开源的 AI 视频笔记助手，支持通过哔哩哔哩、Y
 
 ## 🚀 快速开始
 
-### 方式一：Docker 部署（推荐）
+### 方式一：单 Dockerfile 一键部署（前端 + 后端 + MCP）
+
+一个镜像装下前端（nginx）与后端（FastAPI），双端口同时暴露，`docker build` + `docker run` 即用：
+
+```bash
+docker build -t bilinote .
+
+docker run -d --name bilinote \
+  -p 8080:80 -p 8483:8483 \
+  -v ./data:/app/data \
+  bilinote
+```
+
+| 入口 | 地址 |
+| --- | --- |
+| 前端 Web | http://localhost:8080 |
+| 后端 API / 文档 | http://localhost:8483（接口文档 `/docs`） |
+| MCP（AI 客户端） | http://localhost:8483/mcp |
+
+- 前端经容器内 nginx 反代访问后端，跨机部署零配置：浏览器打开 `http://<服务器IP>:8080` 即用；
+  需要直连后端（MCP、脚本）走 8483。CORS 默认全部放行（任何来源可直连 8483）；要收紧用环境变量 `CORS_ORIGIN_REGEX`（如 `^https://my\.app$`）。
+- 基础镜像固定走华为云 SWR 加速源（`swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/...`），构建不依赖 docker.io。
+- 只挂 `./data:/app/data` 一个卷，升级镜像不丢数据。
+
+**MCP 接入**（Claude Code / Claude Desktop 等支持 Streamable HTTP 的客户端）：
+
+```json
+{
+  "mcpServers": {
+    "bilinote": { "url": "http://localhost:8483/mcp" }
+  }
+}
+```
+
+内置四个工具：`generate_note`（提交视频生成笔记）、`list_notes`、`get_task_status`、`get_note`。
+
+### 方式二：Docker 部署（后端 API 单服务）
 
 确保已安装 Docker，直接拉取预构建镜像运行：
 
@@ -253,7 +289,7 @@ docker logs -f bilinote-backend
 
 如果你 fork 后改过 compose 文件、把 restart 策略改成了 `on-failure:3`：任何 3 次连续崩溃都会让容器永远不再启动，之后改 `.env` 也没用。本项目自带的 compose 已经统一用 `unless-stopped`。
 
-### 方式二：源码部署
+### 方式三：源码部署
 
 #### 1. 克隆仓库
 

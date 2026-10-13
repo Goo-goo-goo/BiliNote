@@ -19,14 +19,17 @@ pytest tests/test_request_chunker.py::test_name   # Run a single test
 
 ### Docker
 ```bash
-docker-compose up                              # 单服务：纯 Python API，唯一挂载 ./data:/app/data
-docker-compose -f docker-compose.gpu.yml up    # GPU variant
+docker build -t bilinote .                   # 单镜像一键：前端(nginx:80) + 后端(FastAPI:8483，含 /mcp)
+docker run -d -p 8080:80 -p 8483:8483 -v ./data:/app/data bilinote
+docker-compose up                            # 仅后端 API 单服务，唯一挂载 ./data:/app/data
+docker-compose -f docker-compose.gpu.yml up  # GPU variant
 ```
 
 ## Architecture
 
 **Backend** (`backend/`) — FastAPI app, entry point `main.py`:
 - `app/routers/` — API routes: `note.py` (generation), `provider.py`, `model.py`, `config.py`, `chat.py` (RAG Q&A on generated notes), `collection.py` (合集/课程), `quiz.py` (自测题/错题本), `review_material.py` (复习资料), `export.py` (Markdown/HTML 导出), `archive.py` (学习存档导出/合并导入)
+- `app/mcp_server.py` — MCP 服务（Streamable HTTP，挂载于 `/mcp`）：`generate_note` / `list_notes` / `get_task_status` / `get_note`，复用 `/api` 同一批服务函数
 - `app/services/` — Business logic:
   - `note.py` — `NoteGenerator` orchestrates the full pipeline (download → transcribe → LLM → notes)
   - `task_serial_executor.py` — task thread pool (`ConcurrentTaskExecutor`)；并发度由 `TASK_MAX_WORKERS` 控制，默认 1（一次一个任务）
@@ -52,7 +55,7 @@ docker-compose -f docker-compose.gpu.yml up    # GPU variant
 - **Data directory**: All persistent data lives under one root (`DATA_DIR`, default `backend/data/`, `/app/data` in Docker) — SQLite DB, `config/`, `uploads/`, `static/screenshots/`, `static/cover/`, `note_results/`, `vector_db/`, `downloads/`, `models/`, `logs/`. Subdirectories auto-create on access via `backend/app/utils/path_helper.py`.
 - **Database**: SQLite at `{DATA_DIR}/bili_note.db`, auto-initialized on first run
 - **FFmpeg**: Required system dependency for video/audio processing
-- **CORS**: `backend/main.py` uses a regex (`CORS_ORIGIN_REGEX`) that allows localhost and extension origins
+- **CORS**: 默认全部放行（`CORS_ORIGIN_REGEX` 环境变量可收紧来源，如 `^https://my\.app$`）
 - **Root path** `/` returns a plain-text health line; API docs at `/docs`
 
 ## Code Style
