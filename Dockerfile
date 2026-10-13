@@ -18,7 +18,9 @@
 # ===============================================================
 
 # ===============================================================
-# = 阶段1：前端构建（pnpm 9.15.0 固定版本，见 CHANGELOG v2.2.x 教训）
+# = 阶段1：前端构建
+#   pnpm 钉死 10.32.1（与本地开发同版本）：不跟 @latest，
+#   且它兼容 pnpm-workspace.yaml 无 packages 字段的配置写法（pnpm 9 会直接报错）。
 # ===============================================================
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-bookworm-slim AS frontend
 
@@ -30,7 +32,10 @@ RUN sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sou
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g pnpm@9.15.0 --registry=${NPM_REGISTRY}
+RUN npm install -g pnpm@10.32.1 --registry=${NPM_REGISTRY}
+
+# 镜像里只做 web 构建，跳过 electron 二进制下载（省 ~100MB，也避开下载失败）
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
