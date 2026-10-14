@@ -89,13 +89,30 @@ export function IconGear({ size }: IconProps) {
   )
 }
 
+export function IconSun({ size }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4" />
+    </svg>
+  )
+}
+
+export function IconMoon({ size }: IconProps) {
+  return (
+    <svg {...svgProps(size)}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z" />
+    </svg>
+  )
+}
+
 /** 品牌标记：圆角方块里的「字幕播放」符号 */
 export function BrandMark({ size = 26 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
-      <rect width="24" height="24" rx="7" fill="var(--primary)" />
+      <rect width="24" height="24" rx="7" fill="var(--brand)" />
       <path d="M9.5 8.2 16 12l-6.5 3.8z" fill="#fff" />
-      <rect x="6.5" y="17" width="11" height="1.6" rx="0.8" fill="var(--amber)" />
+      <rect x="6.5" y="17" width="11" height="1.6" rx="0.8" fill="var(--warn)" />
     </svg>
   )
 }

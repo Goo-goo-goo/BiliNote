@@ -129,7 +129,7 @@ export default function Collections() {
                 </div>
 
                 {openId === c.id && detail && (
-                  <div className="body" style={{ background: 'var(--paper)' }}>
+                  <div className="body" style={{ background: 'var(--bg)' }}>
                     <div className="rowflex" style={{ marginBottom: 12 }}>
                       <Select
                         value={addTaskId}

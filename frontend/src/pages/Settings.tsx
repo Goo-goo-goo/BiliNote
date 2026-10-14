@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, BiliQrcode, downloadExport, getBaseUrl, Provider } from '../lib/api'
+import { getThemeMode, setThemeMode, ThemeMode } from '../lib/theme'
 import { Button, Check, Empty, Field, Modal, Panel, Pill, Select, TextInput, useToast } from '../components/ui'
 import { useApp } from '../state/store'
 
@@ -10,6 +11,7 @@ export default function Settings() {
   return (
     <div className="page">
       <ServerPanel server={server} onSave={setServer} />
+      <AppearancePanel />
       <ProviderPanel />
       <TranscriberPanel />
       <ProxyPanel />
@@ -27,7 +29,7 @@ function ServerPanel({ server, onSave }: { server: string; onSave: (v: string) =
     <Panel title="后端服务">
       <div className="rowflex" style={{ alignItems: 'flex-end' }}>
         <div style={{ flex: 1 }}>
-          <Field label="服务地址" hint="BiliNote 后端 API 的地址，默认 http://localhost:8483">
+          <Field label="服务地址" hint="默认走同源转发（Web / Docker 自动）；要直连后端时填 http://<主机>:8483">
             <TextInput value={value} onChange={setValue} mono />
           </Field>
         </div>
@@ -777,6 +779,39 @@ function ArchivePanel({ toast }: { toast: (msg: string) => void }) {
               e.target.value = ''
             }}
           />
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+// ---------- 外观 ----------
+
+function AppearancePanel() {
+  const [mode, setMode] = useState<ThemeMode>(getThemeMode())
+
+  const choose = (m: ThemeMode) => {
+    setThemeMode(m)
+    setMode(m)
+  }
+
+  return (
+    <Panel title="外观">
+      <div className="rowflex">
+        <span className="small soft">主题</span>
+        <div className="segment" role="radiogroup" aria-label="主题">
+          {(['system', 'light', 'dark'] as ThemeMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={mode === m}
+              className={mode === m ? 'seg active' : 'seg'}
+              onClick={() => choose(m)}
+            >
+              {m === 'system' ? '跟随系统' : m === 'light' ? '浅色' : '深色'}
+            </button>
+          ))}
         </div>
       </div>
     </Panel>

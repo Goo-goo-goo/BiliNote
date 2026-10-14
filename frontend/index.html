@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BiliNote</title>
+    <!-- 主题在首帧前设置，避免暗色模式闪白（与 src/lib/theme.ts 同一套逻辑） -->
+    <script>
+      ;(function () {
+        try {
+          var m = localStorage.getItem('bilinote.theme') || 'system'
+          var dark =
+            m === 'dark' ||
+            (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

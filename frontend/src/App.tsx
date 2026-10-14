@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Tasks from './pages/Tasks'
@@ -11,9 +12,12 @@ import {
   IconFolder,
   IconGear,
   IconHome,
+  IconMoon,
   IconNote,
+  IconSun,
 } from './components/icons'
 import { ErrorBoundary } from './components/ui'
+import { currentTheme, setThemeMode } from './lib/theme'
 
 const NAV = [
   { to: '/', label: '工作台', end: true, icon: IconHome },
@@ -34,9 +38,16 @@ const TITLES: Record<string, string> = {
 
 export default function App() {
   const location = useLocation()
+  const [theme, setTheme] = useState(currentTheme())
   const title =
     TITLES[location.pathname] ||
     (location.pathname.startsWith('/notes/') ? '笔记' : 'BiliNote')
+
+  const toggleTheme = () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark'
+    setThemeMode(next)
+    setTheme(next)
+  }
 
   return (
     <div className="app">
@@ -66,6 +77,14 @@ export default function App() {
       <main className="main">
         <div className="topbar">
           <h1>{title}</h1>
+          <button
+            className="btn quiet icon-btn"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+            aria-label="切换深浅色"
+          >
+            {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
+          </button>
         </div>
 
         <ErrorBoundary>

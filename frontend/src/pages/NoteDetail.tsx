@@ -58,7 +58,6 @@ export default function NoteDetail() {
   return (
     <div className="page">
       <Band
-        title={result.audio_meta?.title || taskId}
         extra={
           <div className="rowflex">
             <Button variant="quiet" size="sm" onClick={() => exportNote('md')}>
