@@ -53,7 +53,7 @@ export default function NoteDetail() {
   }
 
   const markdown = result.markdown || ''
-  const railItems = extractHeadings(markdown).map((h) => ({ id: h.id, label: h.label }))
+  const railItems = extractHeadings(markdown).map((h) => ({ id: h.id, label: h.label, time: h.time }))
 
   return (
     <div className="page">

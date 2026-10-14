@@ -85,7 +85,7 @@ export default function TimeRail(props: { items: RailItem[] }) {
             onClick={() => jump(it.id)}
             title={it.label}
           >
-            <span className="t">{it.time || '—'}</span>
+            {it.time ? <span className="t">{it.time}</span> : null}
             <span className="l">{it.label}</span>
           </button>
         ))}

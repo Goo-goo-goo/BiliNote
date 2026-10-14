@@ -6,9 +6,25 @@ import DOMPurify from 'dompurify'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
+const TIME = String.raw`\d{1,2}:\d{2}(?::\d{2})?`
+
+/** 从标题文本提取时间码（`*Content-[..]` / `[..](链接)` / `[..]` / 裸 mm:ss），
+ *  提取后从标签里连同装饰一起摘掉；标题没带时间码就只回标签（渲染层自行省略）。 */
+export function splitTimecode(raw: string): { label: string; time?: string } {
+  const m = new RegExp(TIME).exec(raw)
+  if (!m) return { label: raw.trim() }
+  const time = m[0]
+  const label = raw
+    .replace(new RegExp(String.raw`\*?Content-\s*\[?${TIME}\]?`, 'g'), ' ')
+    .replace(new RegExp(String.raw`\[?${TIME}\]?(?:\([^)]*\))?`, 'g'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return { label, time }
+}
+
 /** 从 Markdown 提取 ## / ### 标题（跳过代码块），id 与渲染层的锚点编号一致。 */
-export function extractHeadings(markdown: string): { id: string; label: string }[] {
-  const out: { id: string; label: string }[] = []
+export function extractHeadings(markdown: string): { id: string; label: string; time?: string }[] {
+  const out: { id: string; label: string; time?: string }[] = []
   let inFence = false
   let idx = 0
   for (const line of (markdown || '').split('\n')) {
@@ -20,11 +36,12 @@ export function extractHeadings(markdown: string): { id: string; label: string }
     if (inFence) continue
     const m = /^(#{2,3})\s+(.*)$/.exec(s)
     if (m) {
-      const label = m[2]
+      const { label, time } = splitTimecode(m[2])
+      const clean = label
         .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
         .replace(/[*_`]/g, '')
         .trim()
-      out.push({ id: `h-${idx}`, label })
+      out.push({ id: `h-${idx}`, label: clean, time })
       idx++
     }
   }
