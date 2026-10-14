@@ -10,7 +10,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const show = (msg: string) => {
     setToast(msg)
     window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setToast(null), 2600)
+    timer.current = window.setTimeout(() => setToast(null), 3200)
   }
   return (
     <ToastCtx.Provider value={show}>

@@ -126,8 +126,10 @@ export default function Dashboard() {
         style,
         extras: extras.trim() || null,
       })
-      toast(`任务已提交（${res.task_id.slice(0, 8)}…）`)
+      // 提交成功：通知 → 刷新工作台数据 → 跳转任务页（新任务立刻可见）
+      toast(`✓ 任务已提交，正在任务页排队（${res.task_id.slice(0, 8)}…）`)
       setUrl('')
+      refreshTasks()
       navigate('/tasks')
     } catch (e) {
       setError(e instanceof Error ? e.message : '提交失败')
