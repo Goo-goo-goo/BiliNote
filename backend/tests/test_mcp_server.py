@@ -18,8 +18,6 @@ class TestMcpTools(unittest.TestCase):
 
         init_db()
 
-
-class TestMcpTools(unittest.TestCase):
     def test_tools_registered(self):
         names = {t.name for t in asyncio_run(mcp.list_tools())}
         self.assertEqual(
