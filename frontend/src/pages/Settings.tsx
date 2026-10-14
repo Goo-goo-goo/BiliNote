@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, BiliQrcode, downloadExport, Provider } from '../lib/api'
+import { api, BiliQrcode, downloadExport, getBaseUrl, Provider } from '../lib/api'
 import { Button, Check, Empty, Field, Modal, Panel, Pill, Select, TextInput, useToast } from '../components/ui'
 import { useApp } from '../state/store'
 
@@ -14,6 +14,7 @@ export default function Settings() {
       <TranscriberPanel />
       <ProxyPanel />
       <CookiePanel />
+      <McpPanel />
       <HealthPanel />
       <ArchivePanel toast={toast} />
     </div>
@@ -776,6 +777,116 @@ function ArchivePanel({ toast }: { toast: (msg: string) => void }) {
               e.target.value = ''
             }}
           />
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+// ---------- MCP 接入 ----------
+
+/** 复制到剪贴板：非 HTTPS 页面 navigator.clipboard 不可用，走 execCommand 兜底 */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* 落到兜底 */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+function CodeBlock({ text, onCopy }: { text: string; onCopy: (text: string) => void }) {
+  return (
+    <div className="code-block">
+      <pre>{text}</pre>
+      <Button variant="quiet" size="sm" onClick={() => onCopy(text)}>
+        复制
+      </Button>
+    </div>
+  )
+}
+
+function McpPanel() {
+  const toast = useToast()
+  const [endpoint, setEndpoint] = useState(`${getBaseUrl()}/mcp`)
+
+  const copy = (text: string) => {
+    copyText(text).then((ok) => toast(ok ? '已复制到剪贴板' : '复制失败，请手动选中复制'))
+  }
+
+  const claudeCode = `claude mcp add --transport http bilinote ${endpoint}`
+  const mcpJson = JSON.stringify(
+    { mcpServers: { bilinote: { type: 'http', url: endpoint } } },
+    null,
+    2,
+  )
+
+  return (
+    <Panel title="MCP 接入" extra={<span className="small soft">让 AI 客户端直接生成笔记、查任务、读笔记</span>}>
+      <div className="stack">
+        <Field
+          label="MCP 端点地址"
+          hint="Web 部署走前端端口转发，自动填好；客户端和后端不同机器时（比如 Claude 在电脑、BiliNote 在 NAS），改成 http://<后端主机>:<后端端口>/mcp"
+        >
+          <div className="rowflex">
+            <TextInput value={endpoint} onChange={setEndpoint} mono />
+            <Button variant="quiet" onClick={() => copy(endpoint)}>
+              复制
+            </Button>
+          </div>
+        </Field>
+
+        <div className="stack tight">
+          <span className="small soft">Claude Code（终端里执行）</span>
+          <CodeBlock text={claudeCode} onCopy={copy} />
+        </div>
+
+        <div className="stack tight">
+          <span className="small soft">Claude Desktop / Cursor（mcpServers 配置）</span>
+          <CodeBlock text={mcpJson} onCopy={copy} />
+        </div>
+
+        <div className="stack tight">
+          <span className="small soft">
+            Cherry Studio 等图形界面客户端：添加 MCP 服务器 → 传输方式选「流式 HTTP / Streamable HTTP」→ 地址填上面的端点
+          </span>
+        </div>
+
+        <div className="stack tight">
+          <span className="small soft">接入后可用的工具</span>
+          <div>
+            <div className="mcp-tool">
+              <span className="name">generate_note</span>
+              <span className="desc">提交视频 → 笔记任务（异步，返回 task_id）</span>
+            </div>
+            <div className="mcp-tool">
+              <span className="name">list_notes</span>
+              <span className="desc">已完成笔记列表（标题 / 平台 / 时长）</span>
+            </div>
+            <div className="mcp-tool">
+              <span className="name">get_task_status</span>
+              <span className="desc">任务进度、阶段与失败原因</span>
+            </div>
+            <div className="mcp-tool">
+              <span className="name">get_note</span>
+              <span className="desc">读取笔记 Markdown 正文</span>
+            </div>
+          </div>
         </div>
       </div>
     </Panel>

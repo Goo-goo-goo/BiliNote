@@ -13,6 +13,7 @@ export default defineConfig({
       '/api': 'http://localhost:8483',
       '/static': 'http://localhost:8483',
       '/uploads': 'http://localhost:8483',
+      '/mcp': 'http://localhost:8483',
     },
   },
   build: {

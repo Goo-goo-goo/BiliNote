@@ -803,6 +803,46 @@ select.input {
 }
 .qr-hint { text-align: center; line-height: 1.6; }
 
+/* ---------- MCP 接入 ---------- */
+
+.code-block {
+  display: flex;
+  gap: var(--s3);
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s3) var(--s4);
+}
+.code-block pre {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.mcp-tool {
+  display: flex;
+  gap: var(--s4);
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.mcp-tool:last-child { border-bottom: 0; }
+.mcp-tool .name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--primary);
+  flex: none;
+  width: 150px;
+}
+.mcp-tool .desc { color: var(--ink-soft); font-size: var(--fs-sm); }
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 1080px) {
